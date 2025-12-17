@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgresql:
+    image: postgres:15
+    container_name: tax-processing-postgresql
+    hostname: postgresql
+    environment:
+      POSTGRES_DB: TaxProcessing
+      POSTGRES_USER: taxuser
+      POSTGRES_PASSWORD: TaxProcessing123!
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    networks:
+      - tax-processing-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxuser -d TaxProcessing"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Web-based PostgreSQL client
+  adminer:
+    image: adminer
+    container_name: tax-processing-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    networks:
+      - tax-processing-network
+
+volumes:
+  postgresql_data:
+    driver: local
+
+networks:
+  tax-processing-network:
+    driver: bridge

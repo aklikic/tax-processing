@@ -1,0 +1,7 @@
+Table 1
+;Take-on Balances;Transactions;Current Volume;2x Current;5x Current;10x Current
+Time to execute in hours; 	2 ; 	6 ; 	8 ; 	8 ; 	8 ; 	8 
+Transactions; 	4.427.234 ; 	12.314.040 ; 	16.741.274 ; 	33.482.548 ; 	83.706.370 ; 	167.412.740 
+Transactions per hour; 	2.213.617 ; 	2.052.340 ; 	2.092.659 ; 	4.185.318 ; 	10.463.296 ; 	20.926.592 
+Transactions per minute; 	36.893 ; 	34.205 ; 	34.877 ; 	69.755 ; 	174.388 ; 	348.776 
+Transactions per second; 	614 ; 	570 ; 	581 ; 	1.162 ; 	2.906 ; 	5.812 

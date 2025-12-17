@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    container_name: tax-processing-mssql
+    hostname: mssql
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: TaxProcessing123!
+      MSSQL_PID: Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+      - ./mssql/init:/docker-entrypoint-initdb.d
+      - ./mssql:/sql
+    networks:
+      - tax-processing-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P TaxProcessing123! -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Optional: SQL Server Management Studio alternative (Azure Data Studio web)
+  # Uncomment if you want a web-based SQL client
+  # sqlpad:
+  #   image: sqlpad/sqlpad:latest
+  #   container_name: tax-processing-sqlpad
+  #   environment:
+  #     SQLPAD_PORT: 3000
+  #     SQLPAD_CONNECTIONS__mssql__name: "Tax Processing DB"
+  #     SQLPAD_CONNECTIONS__mssql__driver: "mssql"
+  #     SQLPAD_CONNECTIONS__mssql__host: "mssql"
+  #     SQLPAD_CONNECTIONS__mssql__port: "1433"
+  #     SQLPAD_CONNECTIONS__mssql__database: "TaxProcessing"
+  #     SQLPAD_CONNECTIONS__mssql__username: "SA"
+  #     SQLPAD_CONNECTIONS__mssql__password: "TaxProcessing123!"
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     mssql:
+  #       condition: service_healthy
+  #   networks:
+  #     - tax-processing-network
+
+volumes:
+  mssql_data:
+    driver: local
+
+networks:
+  tax-processing-network:
+    driver: bridge
