@@ -13,6 +13,7 @@ public record ProcessingConfig(
     int transactionMicrobatchSize,   // 111 - positions per transaction microbatch
     int transactionWindowSize,       // 320 - transactions loaded per query window
     int maxParallelSubWorkflows,     // 45 - limited by database connection pool
+    int maxParallelWindows,          // 3 - max concurrent window workflows
     int completionWindow,            // 5 - start next batch after 5 completions
     int emergencyThreshold,          // 10 - start immediately if pool drops below this
     int positionIdempotencyCacheSize // 1000 - max number of processed transaction IDs to keep per position
@@ -31,6 +32,7 @@ public record ProcessingConfig(
             processingConfig.getInt("transaction-microbatch-size"),
             processingConfig.getInt("transaction-window-size"),
             processingConfig.getInt("max-parallel-sub-workflows"),
+            processingConfig.getInt("max-parallel-windows"),
             processingConfig.getInt("completion-window"),
             processingConfig.getInt("emergency-threshold"),
             processingConfig.getInt("position-idempotency-cache-size")
@@ -47,6 +49,7 @@ public record ProcessingConfig(
             111,   // transactionMicrobatchSize
             320,   // transactionWindowSize
             45,    // maxParallelSubWorkflows
+            3,     // maxParallelWindows
             5,     // completionWindow
             10,    // emergencyThreshold
             1000   // positionIdempotencyCacheSize
@@ -65,6 +68,9 @@ public record ProcessingConfig(
         }
         if (maxParallelSubWorkflows <= 0) {
             throw new IllegalArgumentException("Max parallel sub-workflows must be positive");
+        }
+        if (maxParallelWindows <= 0) {
+            throw new IllegalArgumentException("Max parallel windows must be positive");
         }
         if (completionWindow <= 0 || completionWindow > maxParallelSubWorkflows) {
             throw new IllegalArgumentException("Completion window must be positive and <= max parallel workflows");

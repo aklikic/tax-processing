@@ -40,6 +40,7 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
                 completion-window = 5
                 emergency-threshold = 10
                 position-idempotency-cache-size = 1000
+                max-parallel-windows = 3
             }
             """);
 
@@ -103,7 +104,7 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
         var parentWorkflowId = "parent-workflow-" + batchId;
         var workflowId = "workflow-" + batchId;
         var startCommand = new OpeningBalanceTransactionsBatchWorkflow.StartCommand(
-            batchId, taxYear, positionIds, 0, parentWorkflowId
+            batchId, taxYear, positionIds, parentWorkflowId
         );
 
         var startResult = componentClient.forWorkflow(workflowId)
@@ -154,7 +155,7 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
 
         var parentWorkflowId = "parent-workflow-" + batchId;
         var startCommand = new OpeningBalanceTransactionsBatchWorkflow.StartCommand(
-                batchId, taxYear, positionIds, 0, parentWorkflowId
+                batchId, taxYear, positionIds, parentWorkflowId
         );
 
         componentClient.forWorkflow(workflowId)
@@ -191,7 +192,7 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
 
         var parentWorkflowId = "parent-workflow-" + batchId;
         var startCommand = new OpeningBalanceTransactionsBatchWorkflow.StartCommand(
-                batchId, taxYear, positionIds, 0, parentWorkflowId
+                batchId, taxYear, positionIds, parentWorkflowId
         );
 
         componentClient.forWorkflow(workflowId)
@@ -254,7 +255,7 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
 
         var parentWorkflowId = "parent-workflow-" + batchId;
         var startCommand = new OpeningBalanceTransactionsBatchWorkflow.StartCommand(
-                batchId, taxYear, positionIds, 0, parentWorkflowId
+                batchId, taxYear, positionIds, parentWorkflowId
         );
 
         componentClient.forWorkflow(workflowId)

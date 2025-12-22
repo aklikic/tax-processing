@@ -5,13 +5,11 @@ import akka.javasdk.annotations.Component;
 import akka.javasdk.annotations.StepName;
 import akka.javasdk.client.ComponentClient;
 import akka.javasdk.workflow.Workflow;
-
 import com.example.domain.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -23,16 +21,16 @@ import java.util.stream.IntStream;
  * Main workflow orchestrating the complete opening balance batch processing.
  * Processes opening balance windows sequentially with callback-based sub-workflows.
  */
-@Component(id = "opening-balance-batch")
-public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchState> {
+@Component(id = "batch-window")
+public class BatchWindowWorkflow extends Workflow<BatchWindowState> {
 
-    private static final Logger logger = LoggerFactory.getLogger(OpeningBalanceBatchWorkflow.class);
+    private static final Logger logger = LoggerFactory.getLogger(BatchWindowWorkflow.class);
 
     private final ComponentClient componentClient;
     private final TaxDataRepository taxDataRepository;
     private final ProcessingConfig processingConfig;
 
-    public OpeningBalanceBatchWorkflow(
+    public BatchWindowWorkflow(
         ComponentClient componentClient,
         TaxDataRepository taxDataRepository,
         ProcessingConfig processingConfig
@@ -45,60 +43,59 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
     @Override
     public WorkflowSettings settings() {
         return WorkflowSettings.builder()
-            .stepTimeout(OpeningBalanceBatchWorkflow::initializationStep, Duration.ofSeconds(30))
-            .stepTimeout(OpeningBalanceBatchWorkflow::loadWindowStep, Duration.ofSeconds(60))
-            .stepTimeout(OpeningBalanceBatchWorkflow::initializePositionsStep, Duration.ofSeconds(30))
-            .stepTimeout(OpeningBalanceBatchWorkflow::launchTransactionProcessingStep, Duration.ofMinutes(5))
-            .defaultStepRecovery(maxRetries(2).failoverTo(OpeningBalanceBatchWorkflow::errorHandlingStep))
+            .stepTimeout(BatchWindowWorkflow::loadWindowStep, Duration.ofSeconds(60))
+            .stepTimeout(BatchWindowWorkflow::initializePositionsStep, Duration.ofSeconds(30))
+            .stepTimeout(BatchWindowWorkflow::launchTransactionProcessingStep, Duration.ofMinutes(5))
+            .defaultStepRecovery(maxRetries(2).failoverTo(BatchWindowWorkflow::errorHandlingStep))
             .build();
     }
 
-    public record StartBatchCommand(String batchId, String taxYear) {}
+    public record StartBatchCommand(String batchId, String taxYear, String windowId, int windowOffset, int windowLimit, String parentWorkflowId) {}
 
     public record BatchStatusResponse(
-        String batchId,
-        String taxYear,
-        OpeningBalanceBatchState.ProcessingStatus status,
-        long totalPositions,
-        int totalWindows,
-        int currentWindow,
-        Map<Integer, OpeningBalanceBatchState.Window> windows,
-        String errorMessage
+            String windowId,
+            int windowOffset,
+            int windowLimit,
+            String batchId,
+            String taxYear,
+            BatchWindowState.ProcessingStatus status,
+            int totalSubWorkflows,
+            Map<String, BatchWindowState.SubWorkflowStatus> subWorkflowStates,
+            String errorMessage
     ) {}
 
     public record SubWorkflowCompletedCommand(
         String subWorkflowId,
-        int positionsCurrentWindow,
         int completedPositions,
         int totalPositions,
         OpeningBalanceTransactionsBatchState.ProcessingStatus status,
         String errorMessage
     ) {}
 
-    private record OpeningBalanceTransactionsBatchWorkflowId(String batchId, int window, int positionBatchIndex){
+    private record OpeningBalanceTransactionsBatchWorkflowId(String batchId, String windowId, int positionBatchIndex){
         public String serialize() {
-            return batchId + "-" + window + "-" + positionBatchIndex;
+            return batchId + "-" + windowId + "-" + positionBatchIndex;
         }
         public static OpeningBalanceTransactionsBatchWorkflowId deserialize(String raw) {
             var split = raw.split("-");
-            return new OpeningBalanceTransactionsBatchWorkflowId(split[0], Integer.parseInt(split[1]), Integer.parseInt(split[2]));
+            return new OpeningBalanceTransactionsBatchWorkflowId(split[0], split[1], Integer.parseInt(split[2]));
         }
     }
 
     @Override
-    public OpeningBalanceBatchState emptyState() {
-        return OpeningBalanceBatchState.empty();
+    public BatchWindowState emptyState() {
+        return BatchWindowState.empty();
     }
 
     /**
      * Start the complete opening balance batch processing.
      */
     public Effect<Done> start(StartBatchCommand command) {
-        logger.info("Starting OpeningBalanceBatchWorkflow: {}", commandContext().workflowId());
+        logger.info("Starting: {}", commandContext().workflowId());
 
         return effects()
-            .updateState(OpeningBalanceBatchState.initialize(command.batchId(), command.taxYear()))
-            .transitionTo(OpeningBalanceBatchWorkflow::initializationStep)
+            .updateState(BatchWindowState.initialize(command.windowId(),command.windowOffset(), command.windowLimit(), command.batchId(), command.taxYear(), command.parentWorkflowId()))
+            .transitionTo(BatchWindowWorkflow::loadWindowStep)
             .thenReply(Done.getInstance());
     }
 
@@ -108,13 +105,14 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
     public Effect<BatchStatusResponse> getStatus() {
         var state = currentState();
         return effects().reply(new BatchStatusResponse(
+            state.windowId(),
+            state.windowOffset(),
+            state.windowLimit(),
             state.batchId(),
             state.taxYear(),
             state.status(),
-            state.totalPositions(),
-            state.totalWindows(),
-            state.currentWindow(),
-            state.windows(),
+            state.totalSubWorkflows(),
+            state.subWorkflowStates(),
             state.errorMessage()
         ));
     }
@@ -125,19 +123,8 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
     public Effect<Done> onSubWorkflowCompleted(SubWorkflowCompletedCommand command) {
         var state = currentState();
 
-        if(state.currentWindow()!=command.positionsCurrentWindow()){
-            logger.info("[{}] Ignoring late sub-workflow completion notification for {} from already completed workflow from old window {} (current window {})",
-                    commandContext().workflowId(), command.subWorkflowId(), command.positionsCurrentWindow(), state.currentWindow());
-            return effects().reply(Done.getInstance());
 
-        }
-        if (!state.windows().containsKey(state.currentWindow())) {
-            logger.info("[{}] Ignoring late sub-workflow completion notification for {} from non existing window {} (current window {})",
-                    commandContext().workflowId(), command.subWorkflowId(),  command.positionsCurrentWindow(), state.currentWindow());
-            return effects().reply(Done.getInstance());
-        }
-
-        if (state.status() == OpeningBalanceBatchState.ProcessingStatus.COMPLETED || state.windows().get(state.currentWindow()).subWorkflowStates().containsKey(command.subWorkflowId())) {
+        if (state.status() == BatchWindowState.ProcessingStatus.COMPLETED || state.subWorkflowStates().containsKey(command.subWorkflowId())) {
             logger.info("[{}] Ignoring late sub-workflow completion notification for {} from already completed workflow",
                 commandContext().workflowId(), command.subWorkflowId());
             return effects().reply(Done.getInstance());
@@ -145,28 +132,23 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
         logger.info("[{}] Callback for sub-workflow {} received", commandContext().workflowId(), command.subWorkflowId());
 
         // Add completed sub-workflow to state
-        var updatedState = state.addSubWorkflowState(state.currentWindow(),
-            new OpeningBalanceBatchState.SubWorkflowStatus(
+        var updatedState = state.addSubWorkflow(
+            new BatchWindowState.SubWorkflowStatus(
                 command.subWorkflowId(),
                 command.status(),
                 command.completedPositions(),
                 command.totalPositions(),
                 command.errorMessage()
             ));
-
-
-        if(updatedState.windows().get(state.currentWindow()).subWorkflowStates().size() == updatedState.windows().get(state.currentWindow()).totalSubWorkflows()){
-            var newWindow = updatedState.currentWindow() + 1;
-            logger.info("[{}] All sub-workflows completed successfully for window {}. Loading new window {}",
-                    commandContext().workflowId(), updatedState.currentWindow(), newWindow);
+        if(updatedState.subWorkflowStates().size() == updatedState.totalSubWorkflows()){
+            logger.info("[{}] All sub-workflows completed successfully",
+                    commandContext().workflowId());
             return effects()
                     .updateState(updatedState
-                            .withStatus(OpeningBalanceBatchState.ProcessingStatus.COMPLETED)
-                            .withCurrentWindow(newWindow)
+                            .withStatus(BatchWindowState.ProcessingStatus.COMPLETED)
                     )
-                    .transitionTo(OpeningBalanceBatchWorkflow::loadWindowStep)
+                    .transitionTo(BatchWindowWorkflow::notifyParentStep)
                     .thenReply(Done.getInstance());
-
         }
 
         return effects()
@@ -175,72 +157,36 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
             .thenReply(Done.getInstance());
     }
 
-    @StepName("initialization")
-    private StepEffect initializationStep() {
-        logger.info("[{}] initializationStep", commandContext().workflowId());
-        // Count total positions to determine how many windows we need
-        var totalPositions = taxDataRepository.countOpeningBalances(currentState().taxYear());
-
-        // Calculate number of windows based on batch size
-        var positionsPerWindow = processingConfig.openingBalanceBatchSize();
-        var totalWindows = (int) Math.ceil((double) totalPositions / positionsPerWindow);
-
-        return stepEffects()
-            .updateState(currentState()
-                .withTotalPositions(totalPositions)
-                .withTotalWindow(totalWindows)
-                .withCurrentWindow(0)
-                .withStatus(OpeningBalanceBatchState.ProcessingStatus.LOAD_NEXT_WINDOW)
-            )
-            .thenTransitionTo(OpeningBalanceBatchWorkflow::loadWindowStep);
-    }
-
     @StepName("load-window")
     private StepEffect loadWindowStep() {
 
         var state = currentState();
 
-        var currentWindow = state.currentWindow();
-        logger.info("[{}] loadWindowStep: {}", commandContext().workflowId(), currentWindow);
-        if (currentWindow >= state.totalWindows()) {
-            logger.info("[{}] All windows completed ({} >= {})", commandContext().workflowId(), currentWindow, state.totalWindows());
-            // All windows completed
-            return stepEffects()
-                .updateState(state.withStatus(OpeningBalanceBatchState.ProcessingStatus.COMPLETED))
-                .thenEnd();
-        }
-
-        var offset = currentWindow * processingConfig.openingBalanceBatchSize();
-        //TODO limit should go to state so it can't change via config when workflow started
-        var limit = processingConfig.openingBalanceBatchSize();
-
-
         // Load opening balances for current window
-        logger.info("[{}] Loading opening balances: taxYear={}, offset={}, limit={}", commandContext().workflowId(), state.taxYear(), offset, limit);
+        logger.info("[{}] Loading opening balances: taxYear={}, offset={}, limit={}", commandContext().workflowId(), state.taxYear(),  state.windowOffset(), state.windowLimit());
         var openingBalances = taxDataRepository.loadOpeningBalancesBatch(
-            state.taxYear(), offset, limit
+            state.taxYear(), state.windowOffset() , state.windowLimit()
         );
 
-        logger.info("[{}] Loaded {} opening balances for window {}", commandContext().workflowId(), openingBalances.size(), currentWindow);
+        logger.info("[{}] Loaded {} opening balances ", commandContext().workflowId(), openingBalances.size());
 
         // Store opening balances in state for next step to avoid reloading
-        var updatedState = state.withOpeningBalancesForCurrentWindow(state.currentWindow(), openingBalances);
+        var updatedState = state.withOpeningBalances(openingBalances);
 
         return stepEffects()
-            .updateState(updatedState.withStatus(OpeningBalanceBatchState.ProcessingStatus.INITIALIZING_POSITIONS))
-            .thenTransitionTo(OpeningBalanceBatchWorkflow::initializePositionsStep);
+            .updateState(updatedState.withStatus(BatchWindowState.ProcessingStatus.INITIALIZING_POSITIONS))
+            .thenTransitionTo(BatchWindowWorkflow::initializePositionsStep);
     }
 
     @StepName("initialize-positions")
     private StepEffect initializePositionsStep() {
         var state = currentState();
-        var currentWindow = state.currentWindow();
-        logger.info("[{}] initializePositionsStep window {}", commandContext().workflowId(), currentWindow);
+        logger.info("[{}] initializePositionsStep", commandContext().workflowId());
 
         // Use opening balances already loaded in previous step
-        var openingBalances = state.windows().get(state.currentWindow()).openingBalances();
+        var openingBalances = state.openingBalances();
 
-        logger.info("[{}] Using {} cached opening balances for window {}",  commandContext().workflowId(), openingBalances.size(), currentWindow);
+        logger.info("[{}] Using {} cached opening balances",  commandContext().workflowId(), openingBalances.size());
 
         // Process each transaction in this window using async calls
         var processingFutures = openingBalances.stream()
@@ -259,20 +205,19 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
         // Materialize the futures - wait for completion
         allProcessed.join();
 
-        logger.info("[{}] initializePositionsStep window {} DONE!", commandContext().workflowId(), currentWindow);
+        logger.info("[{}] initializePositionsStep DONE!", commandContext().workflowId());
         return stepEffects()
-            .updateState(state.withStatus(OpeningBalanceBatchState.ProcessingStatus.LAUNCHING_TRANSACTION_PROCESSING))
-            .thenTransitionTo(OpeningBalanceBatchWorkflow::launchTransactionProcessingStep);
+            .updateState(state.withStatus(BatchWindowState.ProcessingStatus.LAUNCHING_TRANSACTION_PROCESSING))
+            .thenTransitionTo(BatchWindowWorkflow::launchTransactionProcessingStep);
     }
 
     @StepName("launch-transaction-processing")
     private StepEffect launchTransactionProcessingStep() {
         var state = currentState();
-        var currentWindow = state.currentWindow();
-        logger.info("[{}] launchTransactionProcessingStep window {}", commandContext().workflowId(), currentWindow);
+        logger.info("[{}] launchTransactionProcessingStep", commandContext().workflowId());
 
         // Use opening balances already loaded in previous step
-        var openingBalances = state.windows().get(state.currentWindow()).openingBalances();
+        var openingBalances = state.openingBalances();
 
         var positionIds = openingBalances.stream()
             .map(OpeningBalance::positionId)
@@ -297,10 +242,9 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
                     state.batchId(),
                     state.taxYear(),
                     subList,
-                    state.currentWindow(),
                     commandContext().workflowId()
             );
-            var subWorkflowId = new OpeningBalanceTransactionsBatchWorkflowId(state.batchId(), currentWindow, positionBatchIndex);
+            var subWorkflowId = new OpeningBalanceTransactionsBatchWorkflowId(state.batchId(), state.windowId(), positionBatchIndex);
             logger.info("[{}] Launched sub-workflow {}",commandContext().workflowId(), subWorkflowId);
             return componentClient.forWorkflow(subWorkflowId.serialize())
                     .method(OpeningBalanceTransactionsBatchWorkflow::start)
@@ -314,21 +258,51 @@ public class OpeningBalanceBatchWorkflow extends Workflow<OpeningBalanceBatchSta
                 .thenApply(v -> processingFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()));
         final List<OpeningBalanceTransactionsBatchWorkflowId> subWorkflowIds = listFuture.join();
 
-        logger.info("[{}] launchTransactionProcessingStep  window {} DONE!", commandContext().workflowId(), currentWindow);
+        logger.info("[{}] launchTransactionProcessingStep DONE!", commandContext().workflowId());
         // Transition to awaiting callbacks
         return stepEffects()
             .updateState(
-                    state.withTotalSubWorkflows(state.currentWindow(), subWorkflowIds.size())
-                         .withStatus(OpeningBalanceBatchState.ProcessingStatus.AWAITING_TRANSACTION_SUB_WORKFLOWS_CALLBACK))
+                    state.withTotalSubWorkflows(subWorkflowIds.size())
+                         .withStatus(BatchWindowState.ProcessingStatus.AWAITING_TRANSACTION_SUB_WORKFLOWS_CALLBACK))
             .thenPause(); // Workflow pauses until callbacks resume it
     }
 
+
+    @StepName("notify-parent")
+    private StepEffect notifyParentStep() {
+        var state = currentState();
+        var isSuccess = state.status() == BatchWindowState.ProcessingStatus.COMPLETED;
+
+        if (isSuccess) {
+            logger.info("[{}] Successfully completed batch processing",
+                    commandContext().workflowId());
+        } else {
+            logger.error("[{}] Processing failed: {}",
+                    commandContext().workflowId(), state.errorMessage());
+        }
+
+        var callbackCommand = new BatchControllerWorkflow.SubWorkflowCompletedCommand(
+               state.windowId(),
+               state.getCompletedPositionsCount(),
+               state.errorMessage()
+        );
+
+        logger.info("[{}] Notifying parent workflow {} of completion.",
+                commandContext().workflowId(),
+                state.parentWorkflowId());
+
+        componentClient.forWorkflow(state.parentWorkflowId())
+                .method(BatchControllerWorkflow::onSubWorkflowCompleted)
+                .invoke(callbackCommand);
+
+        return stepEffects().thenEnd();
+    }
     @StepName("error-handling")
     private StepEffect errorHandlingStep() {
         logger.info("errorHandlingStep for {} window!", commandContext().workflowId());
         // Error occurred during processing
         return stepEffects()
             .updateState(currentState().withError("Batch processing failed due to system error"))
-            .thenEnd();
+            .thenTransitionTo(BatchWindowWorkflow::notifyParentStep);
     }
 }

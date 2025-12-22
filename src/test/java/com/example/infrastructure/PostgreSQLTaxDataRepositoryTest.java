@@ -2,34 +2,50 @@ package com.example.infrastructure;
 
 import com.example.domain.PositionId;
 import com.typesafe.config.ConfigFactory;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integration test for PostgreSQLTaxDataRepository.
- * Requires a running PostgreSQL database with test data.
+ * Integration test for PostgreSQLTaxDataRepository using Testcontainers.
+ * Automatically starts a PostgreSQL container for testing.
  *
- * Run these tests with: mvn test -Dtest=PostgreSQLTaxDataRepositoryTest
- * Make sure PostgreSQL is running: docker-compose -f sql/docker-compose-postgresql.yml up -d
+ * Run these tests with: mvn test -Dtest.integration=true -Dtest=PostgreSQLTaxDataRepositoryTest
  */
+@Testcontainers
+@EnabledIfSystemProperty(named = "test.integration", matches = "true")
 public class PostgreSQLTaxDataRepositoryTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15")
+            .withDatabaseName("TaxProcessing")
+            .withUsername("testuser")
+            .withPassword("testpassword");
 
     private PostgreSQLTaxDataRepository repository;
 
     @BeforeEach
     void setUp() {
-        var config = ConfigFactory.parseString("""
+        var config = ConfigFactory.parseString(String.format("""
             tax-processing.database {
-                host = "localhost"
-                port = 5432
-                database = "TaxProcessing"
-                username = "taxuser"
-                password = "TaxProcessing123!"
+                host = "%s"
+                port = %d
+                database = "%s"
+                username = "%s"
+                password = "%s"
                 pool {
                     initial-size = 1
                     max-size = 5
@@ -39,14 +55,19 @@ public class PostgreSQLTaxDataRepositoryTest {
                     max-create-connection-time = "30 seconds"
                 }
             }
-            """);
+            """,
+            postgres.getHost(),
+            postgres.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT),
+            postgres.getDatabaseName(),
+            postgres.getUsername(),
+            postgres.getPassword()
+        ));
 
         var connectionFactory = DatabaseConfiguration.createConnectionFactory(config);
         repository = new PostgreSQLTaxDataRepository(connectionFactory);
     }
 
     @Test
-    @Disabled("Requires running PostgreSQL database with test data")
     void testLoadOpeningBalancesBatch() {
         // Test loading opening balances
         var openingBalances = repository.loadOpeningBalancesBatch("2023", 0, 10);
@@ -65,7 +86,6 @@ public class PostgreSQLTaxDataRepositoryTest {
     }
 
     @Test
-    @Disabled("Requires running PostgreSQL database with test data")
     void testLoadTransactionsForPositions() {
         // First get some opening balances to get position IDs
         var openingBalances = repository.loadOpeningBalancesBatch("2023", 0, 5);
@@ -98,14 +118,12 @@ public class PostgreSQLTaxDataRepositoryTest {
     }
 
     @Test
-    @Disabled("Requires running PostgreSQL database with test data")
     void testCountOpeningBalances() {
         var count = repository.countOpeningBalances("2023");
         assertThat(count).isGreaterThanOrEqualTo(0);
     }
 
     @Test
-    @Disabled("Requires running PostgreSQL database with test data")
     void testCountTransactionsForPositions() {
         // First get some opening balances to get position IDs
         var openingBalances = repository.loadOpeningBalancesBatch("2023", 0, 5);

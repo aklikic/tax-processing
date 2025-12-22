@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -22,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Simple integration test for OpeningBalanceBatch workflow to verify basic functionality.
  */
-public class OpeningBalanceBatchWorkflowSimpleTest extends TestKitSupport {
+public class BatchControllerWorkflowSimpleTest extends TestKitSupport {
 
     private final MockTaxDataRepository mockRepository = new MockTaxDataRepository();
 
@@ -39,6 +38,7 @@ public class OpeningBalanceBatchWorkflowSimpleTest extends TestKitSupport {
                 completion-window = 2
                 emergency-threshold = 2
                 position-idempotency-cache-size = 100
+                max-parallel-windows = 3
             }
             """);
 
@@ -75,10 +75,10 @@ public class OpeningBalanceBatchWorkflowSimpleTest extends TestKitSupport {
         var testId = System.currentTimeMillis();
         var batchId = "empty-batch-" + testId;
 
-        var startCommand = new OpeningBalanceBatchWorkflow.StartBatchCommand(batchId, "2023");
+        var startCommand = new BatchControllerWorkflow.StartBatchCommand(batchId, "2023");
 
         componentClient.forWorkflow(batchId)
-            .method(OpeningBalanceBatchWorkflow::start)
+            .method(BatchControllerWorkflow::start)
             .invoke(startCommand);
 
         // Workflow should complete quickly with no data
@@ -86,14 +86,15 @@ public class OpeningBalanceBatchWorkflowSimpleTest extends TestKitSupport {
             .atMost(20, TimeUnit.SECONDS)
             .untilAsserted(() -> {
                 var status = componentClient.forWorkflow(batchId)
-                    .method(OpeningBalanceBatchWorkflow::getStatus)
+                    .method(BatchControllerWorkflow::getStatus)
                     .invoke();
 
                 assertThat(status.status()).isEqualTo(
-                    OpeningBalanceBatchState.ProcessingStatus.COMPLETED
+                    BatchControllerState.ProcessingStatus.COMPLETED
                 );
                 assertThat(status.totalPositions()).isEqualTo(0);
                 assertThat(status.totalWindows()).isEqualTo(0);
+
             });
     }
 
@@ -112,10 +113,10 @@ public class OpeningBalanceBatchWorkflowSimpleTest extends TestKitSupport {
 
         var batchId = "single-batch-" + testId;
 
-        var startCommand = new OpeningBalanceBatchWorkflow.StartBatchCommand(batchId, "2023");
+        var startCommand = new BatchControllerWorkflow.StartBatchCommand(batchId, "2023");
 
         var startResult = componentClient.forWorkflow(batchId)
-            .method(OpeningBalanceBatchWorkflow::start)
+            .method(BatchControllerWorkflow::start)
             .invoke(startCommand);
 
         assertThat(startResult).isEqualTo(Done.getInstance());
@@ -126,11 +127,11 @@ public class OpeningBalanceBatchWorkflowSimpleTest extends TestKitSupport {
             .pollInterval(Duration.ofMillis(500))
             .untilAsserted(() -> {
                 var status = componentClient.forWorkflow(batchId)
-                    .method(OpeningBalanceBatchWorkflow::getStatus)
+                    .method(BatchControllerWorkflow::getStatus)
                     .invoke();
 
                 assertThat(status.status()).isEqualTo(
-                    OpeningBalanceBatchState.ProcessingStatus.COMPLETED
+                    BatchControllerState.ProcessingStatus.COMPLETED
                 );
 //                System.out.println(status);
                 assertThat(status.totalPositions()).isEqualTo(1);
