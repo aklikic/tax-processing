@@ -5,8 +5,8 @@ import akka.javasdk.annotations.Acl;
 import akka.javasdk.annotations.http.*;
 import akka.javasdk.client.ComponentClient;
 import akka.javasdk.http.AbstractHttpEndpoint;
-import com.example.application.OpeningBalanceBatchWorkflow;
-import com.example.domain.OpeningBalanceBatchState;
+import com.example.application.BatchControllerWorkflow;
+import com.example.domain.BatchControllerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,10 +43,10 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
     public BatchStartResponse startBatch(String batchId, StartBatchRequest request) {
         logger.info("Starting tax processing batch: batchId={}, taxYear={}", batchId, request.taxYear());
 
-        var command = new OpeningBalanceBatchWorkflow.StartBatchCommand(batchId, request.taxYear());
+        var command = new BatchControllerWorkflow.StartBatchCommand(batchId, request.taxYear());
 
         componentClient.forWorkflow(batchId)
-            .method(OpeningBalanceBatchWorkflow::start)
+            .method(BatchControllerWorkflow::start)
             .invoke(command);
 
         logger.info("Successfully started batch processing: batchId={}", batchId);
@@ -68,7 +68,7 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
         logger.debug("Getting batch status: batchId={}", batchId);
 
         var status = componentClient.forWorkflow(batchId)
-            .method(OpeningBalanceBatchWorkflow::getStatus)
+            .method(BatchControllerWorkflow::getStatus)
             .invoke();
 
         return toApiStatus(status);
@@ -77,15 +77,14 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
     /**
      * Convert internal workflow status to API response format.
      */
-    private BatchStatusResponse toApiStatus(OpeningBalanceBatchWorkflow.BatchStatusResponse internalStatus) {
+    private BatchStatusResponse toApiStatus(BatchControllerWorkflow.BatchStatusResponse internalStatus) {
         return new BatchStatusResponse(
             internalStatus.batchId(),
                 internalStatus.taxYear(),
             internalStatus.status(),
             internalStatus.totalPositions(),
             internalStatus.totalWindows(),
-            internalStatus.currentWindow(),
-            internalStatus.windows(),
+            internalStatus.windowStatuses(),
             internalStatus.errorMessage()
         );
     }
@@ -114,11 +113,10 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
     public record BatchStatusResponse(
         String batchId,
         String taxYear,
-        OpeningBalanceBatchState.ProcessingStatus status,
+        BatchControllerState.ProcessingStatus status,
         long totalPositions,
         int totalWindows,
-        int currentWindow,
-        Map<Integer,OpeningBalanceBatchState.Window> windows,
+        Map<String, BatchControllerState.WindowStatus> windowStatuses,
         String errorMessage
     ) {}
 }

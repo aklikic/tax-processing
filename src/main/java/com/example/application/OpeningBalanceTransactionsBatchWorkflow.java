@@ -60,7 +60,6 @@ public class OpeningBalanceTransactionsBatchWorkflow extends Workflow<OpeningBal
             command.batchId(),
             command.taxYear(),
             command.positionIds(),
-            command.positionsCurrentWindow(),
             command.parentWorkflowId()
         );
 
@@ -168,9 +167,8 @@ public class OpeningBalanceTransactionsBatchWorkflow extends Workflow<OpeningBal
                 commandContext().workflowId(), state.errorMessage(), state.processedTransactions());
         }
 
-        var callbackCommand = new OpeningBalanceBatchWorkflow.SubWorkflowCompletedCommand(
+        var callbackCommand = new BatchWindowWorkflow.SubWorkflowCompletedCommand(
             commandContext().workflowId(),
-            state.positionsCurrentWindow(),
             state.processedTransactions(),
             state.totalPositions(),
             state.status(),
@@ -182,7 +180,7 @@ public class OpeningBalanceTransactionsBatchWorkflow extends Workflow<OpeningBal
                 state.parentWorkflowId());
 
         componentClient.forWorkflow(state.parentWorkflowId())
-            .method(OpeningBalanceBatchWorkflow::onSubWorkflowCompleted)
+            .method(BatchWindowWorkflow::onSubWorkflowCompleted)
             .invoke(callbackCommand);
 
         return stepEffects().thenEnd();
@@ -207,7 +205,6 @@ public class OpeningBalanceTransactionsBatchWorkflow extends Workflow<OpeningBal
         String batchId,
         String taxYear,
         List<PositionId> positionIds,
-        int positionsCurrentWindow,
         String parentWorkflowId
     ) {}
 

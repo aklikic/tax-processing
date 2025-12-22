@@ -27,6 +27,7 @@ public class PositionEntityTest {
                 completion-window = 5
                 emergency-threshold = 10
                 position-idempotency-cache-size = 1000
+                max-parallel-windows = 3
             }
             """);
         ProcessingConfig config = ProcessingConfig.fromConfig(testConfig);

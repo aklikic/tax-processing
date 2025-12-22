@@ -10,10 +10,8 @@ public record OpeningBalanceTransactionsBatchState(
     String batchId,
     String taxYear,
     List<PositionId> positionIds,
-    int positionsCurrentWindow,
     ProcessingStatus status,
     int totalPositions,
-//    int processedTransactions,
     int processedTransactions,
     String parentWorkflowId,
     String errorMessage
@@ -47,12 +45,11 @@ public record OpeningBalanceTransactionsBatchState(
     /**
      * Create initial state for a new batch.
      */
-    public static OpeningBalanceTransactionsBatchState init(String batchId, String taxYear, List<PositionId> positionIds, int positionsCurrentWindow, String parentWorkflowId) {
+    public static OpeningBalanceTransactionsBatchState init(String batchId, String taxYear, List<PositionId> positionIds, String parentWorkflowId) {
         return new OpeningBalanceTransactionsBatchState(
             batchId,
             taxYear,
             positionIds,
-            positionsCurrentWindow,
             ProcessingStatus.INITIALIZING,
             positionIds.size(),
             0,
@@ -87,7 +84,6 @@ public record OpeningBalanceTransactionsBatchState(
             batchId,
             taxYear,
             positionIds,
-            positionsCurrentWindow,
             newStatus,
             totalPositions,
             processedTransactions,
@@ -104,7 +100,6 @@ public record OpeningBalanceTransactionsBatchState(
             batchId,
             taxYear,
             positionIds,
-            positionsCurrentWindow,
             status,
             totalPositions,
             newProcessedTransactions,
@@ -121,7 +116,6 @@ public record OpeningBalanceTransactionsBatchState(
             batchId,
             taxYear,
             positionIds,
-            positionsCurrentWindow,
             ProcessingStatus.FAILED,
             totalPositions,
             processedTransactions,

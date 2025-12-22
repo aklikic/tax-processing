@@ -32,6 +32,32 @@
       <version>1.0.0.RELEASE</version>
     </dependency>
 
+    <!-- Testcontainers Dependencies for Integration Tests -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>1.19.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>1.19.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>r2dbc</artifactId>
+      <version>1.19.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>1.19.3</version>
+      <scope>test</scope>
+    </dependency>
+
 <!--    &lt;!&ndash; Additional utility dependencies &ndash;&gt;-->
 <!--    <dependency>-->
 <!--      <groupId>org.slf4j</groupId>-->
