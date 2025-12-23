@@ -32,7 +32,7 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
         // Create test configuration
         var testConfig = ConfigFactory.parseString("""
             tax-processing {
-                opening-balance-batch-size = 5000
+                positions-per-window = 5000
                 position-init-batch-size = 500
                 transaction-microbatch-size = 111
                 transaction-window-size = 10

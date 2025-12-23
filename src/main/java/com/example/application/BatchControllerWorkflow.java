@@ -92,7 +92,7 @@ public class BatchControllerWorkflow extends Workflow<BatchControllerState> {
         logger.info("Starting OpeningBalanceBatchWorkflow: {}", commandContext().workflowId());
 
         return effects()
-            .updateState(BatchControllerState.initialize(command.batchId(), command.taxYear(), processingConfig.maxParallelWindows(), processingConfig.openingBalanceBatchSize()))
+            .updateState(BatchControllerState.initialize(command.batchId(), command.taxYear(), processingConfig.maxParallelWindows(), processingConfig.positionsPerWindow()))
             .transitionTo(BatchControllerWorkflow::initializationStep)
             .thenReply(Done.getInstance());
     }

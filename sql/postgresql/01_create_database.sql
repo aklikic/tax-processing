@@ -13,7 +13,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Create sequences for ID generation
 CREATE SEQUENCE IF NOT EXISTS tax.opening_balances_id_seq;
 CREATE SEQUENCE IF NOT EXISTS tax.transactions_id_seq;
-CREATE SEQUENCE IF NOT EXISTS tax.position_summary_id_seq;
 
 COMMENT ON SCHEMA tax IS 'Schema for tax processing tables and functions';
 
