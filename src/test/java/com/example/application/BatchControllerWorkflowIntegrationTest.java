@@ -33,7 +33,7 @@ public class BatchControllerWorkflowIntegrationTest extends TestKitSupport {
         // Create test configuration with smaller batch sizes for testing
         var testConfig = ConfigFactory.parseString("""
             tax-processing {
-                opening-balance-batch-size = 4
+                positions-per-window = 4
                 position-init-batch-size = 2
                 transaction-microbatch-size = 2
                 transaction-window-size = 5

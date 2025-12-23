@@ -133,18 +133,6 @@ public class PositionProcessingStatusEndpoint extends AbstractHttpEndpoint {
     }
 
     /**
-     * Get recently processed positions (up to specified limit).
-     * GET /api/processing-status/positions/recent/{limit}
-     */
-    @Get("/positions/recent/{limit}")
-    public PositionProcessingStatusView.PositionStatusResult getRecentlyProcessedPositions(int limit) {
-        logger.info("Getting recently processed positions, limit: {}", limit);
-        return componentClient.forView()
-            .method(PositionProcessingStatusView::getRecentlyProcessedPositions)
-            .invoke(limit);
-    }
-
-    /**
      * Get account processing summary (manual aggregation).
      * GET /api/processing-status/accounts
      */

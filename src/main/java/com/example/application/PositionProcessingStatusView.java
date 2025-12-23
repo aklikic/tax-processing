@@ -193,14 +193,6 @@ public class PositionProcessingStatusView extends View {
     }
 
     /**
-     * Get positions with active processing (transactions processed recently).
-     */
-    @Query("SELECT * AS positions FROM position_processing_status WHERE transactionsProcessed > 0 ORDER BY lastTransactionTime DESC LIMIT :limit")
-    public QueryEffect<PositionStatusResult> getRecentlyProcessedPositions(int limit) {
-        return queryResult();
-    }
-
-    /**
      * Get all positions for manual aggregation (since Akka SDK doesn't support complex aggregations).
      * Use this to calculate summary statistics in application code.
      */

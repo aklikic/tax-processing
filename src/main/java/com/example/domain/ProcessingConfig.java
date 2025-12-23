@@ -8,7 +8,7 @@ import com.typesafe.config.Config;
  * Loads configuration from application.conf under 'tax-processing' path.
  */
 public record ProcessingConfig(
-    int openingBalanceBatchSize,     // 5,000 - opening balances per main batch
+    int positionsPerWindow,          // 5,000 - opening balance positions per window
     int positionInitBatchSize,       // 500 - position entities initialized per step
     int transactionMicrobatchSize,   // 111 - positions per transaction microbatch
     int transactionWindowSize,       // 320 - transactions loaded per query window
@@ -27,7 +27,7 @@ public record ProcessingConfig(
     public static ProcessingConfig fromConfig(Config config) {
         var processingConfig = config.getConfig("tax-processing");
         return new ProcessingConfig(
-            processingConfig.getInt("opening-balance-batch-size"),
+            processingConfig.getInt("positions-per-window"),
             processingConfig.getInt("position-init-batch-size"),
             processingConfig.getInt("transaction-microbatch-size"),
             processingConfig.getInt("transaction-window-size"),
@@ -44,7 +44,7 @@ public record ProcessingConfig(
      */
     public static ProcessingConfig defaultConfig() {
         return new ProcessingConfig(
-            5000,  // openingBalanceBatchSize
+            5000,  // positionsPerWindow
             500,   // positionInitBatchSize
             111,   // transactionMicrobatchSize
             320,   // transactionWindowSize
@@ -57,8 +57,8 @@ public record ProcessingConfig(
     }
 
     public ProcessingConfig {
-        if (openingBalanceBatchSize <= 0) {
-            throw new IllegalArgumentException("Opening balance batch size must be positive");
+        if (positionsPerWindow <= 0) {
+            throw new IllegalArgumentException("Positions per window must be positive");
         }
         if (positionInitBatchSize <= 0) {
             throw new IllegalArgumentException("Position init batch size must be positive");
