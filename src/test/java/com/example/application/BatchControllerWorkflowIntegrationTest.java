@@ -324,11 +324,14 @@ public class BatchControllerWorkflowIntegrationTest extends TestKitSupport {
                 .atMost(90, TimeUnit.SECONDS)
                 .pollInterval(Duration.ofSeconds(1))
                 .untilAsserted(() -> {
-                    var res = componentClient.forView()
-                            .method(PositionProcessingStatusView::getAllPositions)
-                            .invoke();
-                    var positions = res.positions().stream().filter(p -> p.positionId().contains(testId+"")).toList();
-                    assertThat(positions.size()).isEqualTo(5);
+                    for(OpeningBalance ob : openingBalances) {
+                        var res = componentClient.forView()
+                                .method(PositionProcessingStatusView::getPosition)
+                                .invoke(ob.positionId().toEntityId());
+                        assertThat(res.initialized()).isTrue();
+                        assertThat(res.transactionsProcessed()).isEqualTo(0);
+                    }
+
                 });
 
     }

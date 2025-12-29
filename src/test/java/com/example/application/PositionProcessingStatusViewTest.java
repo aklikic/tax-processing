@@ -1,28 +1,53 @@
 package com.example.application;
 
+import akka.javasdk.client.ComponentClient;
+import akka.javasdk.http.HttpClient;
 import akka.javasdk.testkit.TestKit;
+import akka.javasdk.timer.TimerScheduler;
 import com.example.domain.*;
 import akka.javasdk.testkit.TestKitSupport;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.in;
 
 /**
  * Integration test for PositionProcessingStatusView.
  * Tests the view updates correctly when PositionEntity emits events.
  */
-public class PositionProcessingStatusViewTest extends TestKitSupport {
+public class PositionProcessingStatusViewTest {
 
-    @Override
-    protected TestKit.Settings testKitSettings() {
+    private TestKit testKit;
+    private ComponentClient componentClient;
+
+    private TestKit.Settings testKitSettings() {
         return TestKit.Settings.DEFAULT
             .withEventSourcedEntityIncomingMessages(PositionEntity.class);
+    }
+
+    @BeforeEach
+    public void beforeAll() {
+        try {
+            this.testKit = (new TestKit(this.testKitSettings())).start();
+            this.componentClient = this.testKit.getComponentClient();
+        } catch (Exception var2) {
+            throw var2;
+        }
+    }
+
+    @AfterEach
+    public void afterAll() {
+        if (this.testKit != null) {
+            this.testKit.stop();
+        }
+
     }
 
     @Test
@@ -161,80 +186,43 @@ public class PositionProcessingStatusViewTest extends TestKitSupport {
     }
 
     @Test
-    public void testProcessingSummary() {
-        var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
-
-        // Create multiple positions for summary testing
-        var positions = new String[]{"ACC001-AAPL", "ACC001-MSFT", "ACC002-GOOGL"};
-
-        for (int i = 0; i < positions.length; i++) {
-            var positionId = positions[i];
-            var parts = positionId.split("-");
-
-            // Initialize each position
-            var initializedEvent = new PositionEvent.Initialized(
-                new PositionId(parts[0], parts[1]),
-                BigDecimal.valueOf(100.00),
-                BigDecimal.valueOf(5000.00),
-                BigDecimal.valueOf(50.00)
-            );
-            events.publish(initializedEvent, positionId);
-
-            // Add some transaction processing for variety
-            if (i > 0) {
-                var transaction = new Transaction(
-                    "TXN00" + i,
-                    parts[0],
-                    parts[1],
-                    TransactionType.BUY,
-                    Instant.now().minus(i, ChronoUnit.HOURS),
-                    BigDecimal.valueOf(10.00),
-                    BigDecimal.valueOf(50.00),
-                    BigDecimal.valueOf(5.00)
-                );
-
-                var bookCostEvent = new PositionEvent.BookCostAdjusted(
-                    new PositionId(parts[0], parts[1]),
-                    transaction,
-                    BigDecimal.valueOf(110.00),
-                    BigDecimal.valueOf(5505.00),
-                    BigDecimal.valueOf(50.05)
-                );
-                events.publish(bookCostEvent, positionId);
-            }
-        }
-
-        // Wait for all positions to be processed and check counts
-        Awaitility.await()
-            .atMost(15, TimeUnit.SECONDS)
-            .untilAsserted(() -> {
-                var allPositions = componentClient.forView()
-                    .method(PositionProcessingStatusView::getAllPositionsForSummary)
-                    .invoke();
-
-                assertThat(allPositions.positions()).hasSize(3);
-                assertThat(allPositions.positions().stream().mapToInt(p -> p.initialized() ? 1 : 0).sum()).isEqualTo(3);
-                assertThat(allPositions.positions().stream().mapToInt(p -> p.transactionsProcessed() > 0 ? 1 : 0).sum()).isEqualTo(2); // Only 2 have processed transactions
-                assertThat(allPositions.positions().stream().mapToInt(PositionProcessingStatusView.PositionStatusEntry::transactionsProcessed).sum()).isEqualTo(2);
-            });
-    }
-
-    @Test
-    public void testQueryByAccount() {
+    public void testTotalsQuery() {
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
 
         // Create positions for different accounts
         var accountPositions = new String[]{"ACC999-AAPL", "ACC999-MSFT", "ACC888-GOOGL"};
 
-        for (var positionId : accountPositions) {
-            var parts = positionId.split("-");
+        for (var positionIdStr : accountPositions) {
+            var parts = positionIdStr.split("-");
+            var positionId = new PositionId(parts[0], parts[1]);
             var initializedEvent = new PositionEvent.Initialized(
-                new PositionId(parts[0], parts[1]),
+                    positionId,
                 BigDecimal.valueOf(100.00),
                 BigDecimal.valueOf(5000.00),
                 BigDecimal.valueOf(50.00)
             );
-            events.publish(initializedEvent, positionId);
+            events.publish(initializedEvent, positionIdStr);
+
+            // Process a buy transaction
+            var buyTransaction = new Transaction(
+                    UUID.randomUUID().toString(),
+                    positionId.accountId(),
+                    positionId.instrumentId(),
+                    TransactionType.BUY,
+                    Instant.now(),
+                    BigDecimal.valueOf(50.00),
+                    BigDecimal.valueOf(55.00),
+                    BigDecimal.valueOf(10.00)
+            );
+
+            var bookCostAdjustedEvent = new PositionEvent.BookCostAdjusted(
+                    positionId,
+                    buyTransaction,
+                    BigDecimal.valueOf(250.00),
+                    BigDecimal.valueOf(12760.00),
+                    BigDecimal.valueOf(51.04)
+            );
+            events.publish(bookCostAdjustedEvent, positionIdStr);
         }
 
         // Query positions for ACC999
@@ -242,16 +230,34 @@ public class PositionProcessingStatusViewTest extends TestKitSupport {
             .atMost(10, TimeUnit.SECONDS)
             .untilAsserted(() -> {
                 var result = componentClient.forView()
-                    .method(PositionProcessingStatusView::getPositionsByAccount)
-                    .invoke("ACC999");
+                    .method(PositionProcessingStatusView::getAllPositionsCount)
+                    .invoke();
 
-                assertThat(result.positions()).hasSize(2);
-                assertThat(result.positions()).allMatch(p -> p.accountId().equals("ACC999"));
-                var instruments = result.positions().stream()
-                    .map(PositionProcessingStatusView.PositionStatusEntry::instrumentId)
-                    .sorted()
-                    .toList();
-                assertThat(instruments).containsExactly("AAPL", "MSFT");
+
+                assertThat(result.totalCount()).isEqualTo(3);
+
+                result = componentClient.forView()
+                        .method(PositionProcessingStatusView::getPositionsByAccountCount)
+                        .invoke("ACC999");
+
+
+                assertThat(result.totalCount()).isEqualTo(2);
+
+                result = componentClient.forView()
+                        .method(PositionProcessingStatusView::getUnprocessedPositionsCount)
+                        .invoke();
+
+
+                assertThat(result.totalCount()).isEqualTo(0);
+
+                result = componentClient.forView()
+                        .method(PositionProcessingStatusView::getPositionsCountByTransactionCount)
+                        .invoke(1);
+
+                assertThat(result.totalCount()).isEqualTo(3);
+
             });
     }
+
+
 }

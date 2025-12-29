@@ -47,8 +47,14 @@ public class OpeningBalanceTransactionsBatchWorkflow extends Workflow<OpeningBal
         return WorkflowSettings.builder()
             .defaultStepTimeout(Duration.ofSeconds(30))
             .stepTimeout(OpeningBalanceTransactionsBatchWorkflow::processTransactionsStep, Duration.ofMinutes(5))
+            .stepTimeout(OpeningBalanceTransactionsBatchWorkflow::notifyParentStep, Duration.ofMinutes(1))
             .defaultStepRecovery(maxRetries(2).failoverTo(OpeningBalanceTransactionsBatchWorkflow::errorStep))
             .build();
+    }
+
+    @Override
+    public OpeningBalanceTransactionsBatchState emptyState() {
+        return OpeningBalanceTransactionsBatchState.empty();
     }
 
     /**
@@ -56,6 +62,12 @@ public class OpeningBalanceTransactionsBatchWorkflow extends Workflow<OpeningBal
      * Positions must already be initialized.
      */
     public Effect<Done> start(StartCommand command) {
+
+        if(!currentState().isEmpty()){
+            logger.error("Starting already started workflow: {}", commandContext().workflowId());
+            return effects().reply(Done.getInstance());
+        }
+
         var initialState = OpeningBalanceTransactionsBatchState.init(
             command.batchId(),
             command.taxYear(),

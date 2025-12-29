@@ -1,5 +1,8 @@
 package com.example.domain;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,11 +23,13 @@ public record BatchControllerState(
     int positionsPerWindow,
     int totalWindows,
     int maxParallelWindows,
-    int lastWindowId,
+    int nextWindowId,
     Map<String, WindowStatus> windowStatuses,
     long completedPositions,
     String errorMessage
 ) {
+
+    private static final Logger logger = LoggerFactory.getLogger(BatchControllerState.class);
 
     public enum ProcessingStatus {
         PENDING, INITIALIZING, LAUNCHING_WINDOWS, AWAITING_WINDOW_SUB_WORKFLOWS_CALLBACK, COMPLETED, FAILED
@@ -51,7 +56,7 @@ public record BatchControllerState(
     ) {
         public static WindowStatus initializing(String batchId, String windowId, int windowOffset, int windowLimit) {
             var windowWorkflowId = new BatchWindowWorkflowId(batchId, windowId);
-            return new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId.serialize(),WindowProcessingStatus.RUNNING, 0,null);
+            return new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId.serialize(),WindowProcessingStatus.TO_RUN, 0,null);
         }
 
         public WindowStatus withStatus(WindowProcessingStatus newStatus) {
@@ -64,7 +69,7 @@ public record BatchControllerState(
     }
 
     public enum WindowProcessingStatus {
-        RUNNING, COMPLETED, FAILED
+        TO_RUN, RUNNING, COMPLETED, FAILED
     }
 
     public static BatchControllerState empty() {
@@ -100,15 +105,15 @@ public record BatchControllerState(
     }
 
     public BatchControllerState withTotalPositions(long total) {
-        return new BatchControllerState(batchId, taxYear, status, total, positionsPerWindow, totalWindows, maxParallelWindows, lastWindowId, windowStatuses, completedPositions, errorMessage);
+        return new BatchControllerState(batchId, taxYear, status, total, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, errorMessage);
     }
 
     public BatchControllerState withTotalWindows(int total) {
-        return new BatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,total, maxParallelWindows, lastWindowId, windowStatuses, completedPositions, errorMessage);
+        return new BatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,total, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, errorMessage);
     }
 
     public BatchControllerState withStatus(ProcessingStatus newStatus) {
-        return new BatchControllerState(batchId, taxYear, newStatus, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, lastWindowId, windowStatuses, completedPositions, errorMessage);
+        return new BatchControllerState(batchId, taxYear, newStatus, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, errorMessage);
     }
 
 
@@ -116,21 +121,21 @@ public record BatchControllerState(
         var updated = new ConcurrentHashMap<>(windowStatuses);
         updated.put(windowId, windowStatuses.get(windowId).onResult(windowCompletedPositions, newErrorMessage));
         var newCompletedPositions = completedPositions + windowCompletedPositions;
-        return new BatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, lastWindowId, updated, newCompletedPositions , newErrorMessage.orElse(errorMessage));
+        return new BatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, updated, newCompletedPositions , newErrorMessage.orElse(errorMessage));
     }
 
 
     public BatchControllerState withError(String error) {
-        return new BatchControllerState(batchId, taxYear, ProcessingStatus.FAILED, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, lastWindowId, windowStatuses, completedPositions, error);
+        return new BatchControllerState(batchId, taxYear, ProcessingStatus.FAILED, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, error);
     }
 
     public BatchControllerState prepareNextWindowBatchToLaunch() {
-        var windowIdStartInclusive = lastWindowId;
+        var windowIdStartInclusive = nextWindowId;
         var windowIdEndExclusive = windowIdStartInclusive + maxParallelWindows;
         if(windowIdEndExclusive > totalWindows) {
             windowIdEndExclusive = totalWindows;
         }
-        var windowStatuses =
+        var newWindowStatuses =
                 IntStream.range(windowIdStartInclusive, windowIdEndExclusive).mapToObj(index -> {
                     var windowId = index + "";
                     var windowOffset = index * positionsPerWindow;
@@ -143,7 +148,7 @@ public record BatchControllerState(
                 }).collect(Collectors.toMap(BatchControllerState.WindowStatus::windowId, Function.identity()));
 
         var updated = new ConcurrentHashMap<>(windowStatuses);
-        updated.putAll(windowStatuses);
+        updated.putAll(newWindowStatuses);
 
         return new BatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, windowIdEndExclusive ,updated, completedPositions, errorMessage);
 
@@ -151,34 +156,25 @@ public record BatchControllerState(
 
     public List<WindowStatus> getWindowStatusesToRun() {
         return windowStatuses.values().stream()
+                .filter(ws -> ws.status() == WindowProcessingStatus.TO_RUN)
+                .collect(Collectors.toList());
+    }
+
+    public List<WindowStatus> getWindowStatusesRunning() {
+        return windowStatuses.values().stream()
                 .filter(ws -> ws.status() == WindowProcessingStatus.RUNNING)
                 .collect(Collectors.toList());
     }
 
-//    public int waitingWindowsCount() {
-//        return (int) windowStatuses.values().stream()
-//                .filter(ws -> ws.status() == WindowProcessingStatus.WAITING)
-//                .count();
-//    }
-
-    public int runningWindowsCount() {
-        return (int) windowStatuses.values().stream()
-            .filter(ws -> ws.status() == WindowProcessingStatus.RUNNING)
-            .count();
-    }
-
-    public int completedWindowsCount() {
-        return (int) windowStatuses.values().stream()
-            .filter(ws -> ws.status() == WindowProcessingStatus.COMPLETED)
-            .count();
-    }
-
-    public boolean allWindowsCompleted() {
-        return completedWindowsCount() == totalWindows;
-    }
-
-    public boolean hasFailedWindows() {
-        return windowStatuses.values().stream()
-            .anyMatch(ws -> ws.status() == WindowProcessingStatus.FAILED);
+    public BatchControllerState markWindowStatusesRunning(List<WindowStatus> windows){
+        var updated = new ConcurrentHashMap<>(windowStatuses);
+        for(WindowStatus windowStatus : windows){
+            if(updated.get(windowStatus.windowId()).status() == WindowProcessingStatus.TO_RUN) {
+                updated.put(windowStatus.windowId(), windowStatus.withStatus(WindowProcessingStatus.RUNNING));
+            } else {
+                logger.error("[{}] markWindowStatusesRunning status of {} is {}", batchId, windowStatus.windowId(), updated.get(windowStatus.windowId()).status());
+            }
+        }
+        return new BatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId,updated, completedPositions, errorMessage);
     }
 }

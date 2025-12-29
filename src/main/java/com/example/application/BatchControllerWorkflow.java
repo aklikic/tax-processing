@@ -120,7 +120,8 @@ public class BatchControllerWorkflow extends Workflow<BatchControllerState> {
     public Effect<Done> onSubWorkflowCompleted(SubWorkflowCompletedCommand command) {
         var state = currentState();
 
-        if (state.status() == BatchControllerState.ProcessingStatus.COMPLETED || state.windowStatuses().get(command.windowId()).status() != BatchControllerState.WindowProcessingStatus.RUNNING) {
+        if (state.status() == BatchControllerState.ProcessingStatus.COMPLETED ||
+                (state.windowStatuses().containsKey(command.windowId()) && state.windowStatuses().get(command.windowId()).status() != BatchControllerState.WindowProcessingStatus.RUNNING)) {
             logger.info("[{}] Ignoring late sub-workflow completion notification for {}",
                     commandContext().workflowId(), command.windowId());
             return effects().reply(Done.getInstance());
@@ -134,19 +135,29 @@ public class BatchControllerWorkflow extends Workflow<BatchControllerState> {
         // prepare next window batch to launch
         updatedState = updatedState.prepareNextWindowBatchToLaunch();
 
-        if(updatedState.getWindowStatusesToRun().isEmpty()){
+        var windowStatusesRunningCount = updatedState.getWindowStatusesRunning().size();
+        var windowStatusesNextToRun = updatedState.getWindowStatusesToRun().size();
+
+        if(windowStatusesRunningCount == 0 && windowStatusesNextToRun == 0){
             logger.info("[{}] All sub-workflows completed successfully. Not more windows to run. DONE!",
                     commandContext().workflowId());
             return effects()
                     .updateState(updatedState.withStatus(BatchControllerState.ProcessingStatus.COMPLETED))
                     .end()
                     .thenReply(Done.getInstance());
-        }else {
-            logger.info("[{}] Run next windows: {}",
-                    commandContext().workflowId(), updatedState.getWindowStatusesToRun().size());
+        } else if (windowStatusesNextToRun > 0){
+            logger.info("[{}] Still running windows {}, run next windows: {}",
+                    commandContext().workflowId(), windowStatusesRunningCount,windowStatusesNextToRun);
             return effects()
                     .updateState(updatedState)
                     .transitionTo(BatchControllerWorkflow::launchWindowsStep)
+                    .thenReply(Done.getInstance());
+        } else {
+            logger.info("[{}] Still running windows {}, no next windows to run. Pausing.",
+                    commandContext().workflowId(), windowStatusesRunningCount);
+            return effects()
+                    .updateState(updatedState)
+                    .pause()
                     .thenReply(Done.getInstance());
         }
     }
@@ -210,7 +221,10 @@ public class BatchControllerWorkflow extends Workflow<BatchControllerState> {
         listFuture.join();
 
         return stepEffects()
-                .updateState(state.withStatus(BatchControllerState.ProcessingStatus.AWAITING_WINDOW_SUB_WORKFLOWS_CALLBACK))
+                .updateState(
+                        state.withStatus(BatchControllerState.ProcessingStatus.AWAITING_WINDOW_SUB_WORKFLOWS_CALLBACK)
+                             .markWindowStatusesRunning(nextWindowBatches)
+                )
                 .thenPause();
 
 

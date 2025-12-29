@@ -306,31 +306,77 @@ curl -X GET http://localhost:9000/tax-processing/batches/batch-2023-001/status
 - `COMPLETED` - All processing finished successfully
 - `FAILED` - Processing failed with an error
 
-### Example Batch Processing Flow
+### Position Processing Status
+
+Monitor individual position processing status and statistics:
 
 ```bash
-# Start a new batch
-BATCH_ID="batch-$(date +%Y%m%d-%H%M%S)"
+# Get total count of all positions being tracked
+curl -X GET http://localhost:9000/api/processing-status/positions/count
+```
 
-curl -X POST http://localhost:9000/tax-processing/batches/${BATCH_ID}/start \
-  -H "Content-Type: application/json" \
-  -d '{"taxYear": "2023"}'
+**Response:**
+```json
+{
+  "totalCount": 4400000
+}
+```
 
-# Monitor progress every 30 seconds
-while true; do
-  STATUS=$(curl -s http://localhost:9000/tax-processing/batches/${BATCH_ID}/status | jq -r '.status')
-  PROGRESS=$(curl -s http://localhost:9000/tax-processing/batches/${BATCH_ID}/status | jq -r '.progressPercentage')
+```bash
+# Get total count of positions for a specific account
+curl -X GET http://localhost:9000/api/processing-status/accounts/ACC123456/positions/count
+```
 
-  echo "Status: $STATUS, Progress: $PROGRESS%"
+**Response:**
+```json
+{
+  "totalCount": 1250
+}
+```
 
-  if [[ "$STATUS" == "COMPLETED" ]] || [[ "$STATUS" == "FAILED" ]]; then
-    break
-  fi
+```bash
+# Get processing status for a specific position
+curl -X GET http://localhost:9000/api/processing-status/positions/ACC123456-AAPL
+```
 
-  sleep 30
-done
+**Response:**
+```json
+{
+  "positionId": "ACC123456-AAPL",
+  "accountId": "ACC123456",
+  "instrumentId": "AAPL",
+  "initialized": true,
+  "transactionsProcessed": 15,
+  "currentUnitsHeld": 1000.00,
+  "currentBookCost": 150000.00,
+  "totalGainLoss": 2500.00,
+  "lastTransactionTime": "2023-12-15T14:30:00Z",
+  "lastUpdated": "2023-12-15T14:30:05Z"
+}
+```
 
-echo "Batch processing finished with status: $STATUS"
+```bash
+# Get count of unprocessed positions (initialized but no transactions processed)
+curl -X GET http://localhost:9000/api/processing-status/positions/unprocessed/count
+```
+
+**Response:**
+```json
+{
+  "totalCount": 125000
+}
+```
+
+```bash
+# Get count of positions with specific transaction count
+curl -X GET http://localhost:9000/api/processing-status/positions/transactions/0/count
+```
+
+**Response:**
+```json
+{
+  "totalCount": 125000
+}
 ```
 
 ## Development
@@ -347,9 +393,9 @@ Run unit tests:
 mvn test
 ```
 
-Run integration tests (includes PostgreSQL Testcontainers):
+Run integration tests without docker (disabling tests that use test containers):
 ```shell
-mvn test -Dtest.integration=true
+mvn test -Ddocker=false
 ```
 
 ### Local Development
@@ -370,7 +416,7 @@ mvn compile exec:java
 **Run specific integration tests:**
 ```shell
 # PostgreSQL repository tests
-mvn test -Dtest.integration=true -Dtest=PostgreSQLTaxDataRepositoryTest
+mvn test -Dtest=PostgreSQLTaxDataRepositoryTest
 
 # Workflow integration tests
 mvn test -Dtest=BatchControllerWorkflowIntegrationTest

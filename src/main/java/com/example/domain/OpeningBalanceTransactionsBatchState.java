@@ -18,28 +18,28 @@ public record OpeningBalanceTransactionsBatchState(
 ) {
 
     public enum ProcessingStatus {
+        PENDING,
         INITIALIZING,
         PROCESSING_TRANSACTIONS,
         COMPLETED,
         FAILED
     }
 
-    public OpeningBalanceTransactionsBatchState {
-        if (batchId == null || batchId.isBlank()) {
-            throw new IllegalArgumentException("Batch ID cannot be null or blank");
-        }
-        if (taxYear == null || taxYear.isBlank()) {
-            throw new IllegalArgumentException("Tax year cannot be null or blank");
-        }
-        if (positionIds == null) {
-            throw new IllegalArgumentException("Position IDs cannot be null");
-        }
-        if (status == null) {
-            throw new IllegalArgumentException("Status cannot be null");
-        }
-        if (totalPositions < 0) {
-            throw new IllegalArgumentException("Total positions cannot be negative");
-        }
+    public static OpeningBalanceTransactionsBatchState empty(){
+        return new OpeningBalanceTransactionsBatchState(
+                "",
+                "",
+                List.of(),
+                ProcessingStatus.PENDING,
+                0,
+                0,
+                "",
+                ""
+        );
+    }
+
+    public boolean isEmpty(){
+        return batchId.isBlank();
     }
 
     /**
@@ -58,23 +58,6 @@ public record OpeningBalanceTransactionsBatchState(
         );
     }
 
-    /**
-     * Create initial state for a new batch with parent workflow callback.
-     */
-//    public static OpeningBalanceTransactionsBatchState initWithParent(String batchId, String taxYear, List<PositionId> positionIds, String parentWorkflowId) {
-//        return new OpeningBalanceTransactionsBatchState(
-//            batchId,
-//            taxYear,
-//            positionIds,
-//
-//            ProcessingStatus.INITIALIZING,
-//            positionIds.size(),
-//            0,
-//            0,
-//            parentWorkflowId,
-//            null
-//        );
-//    }
 
     /**
      * Update status.
