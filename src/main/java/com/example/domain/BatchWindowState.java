@@ -50,6 +50,10 @@ public record BatchWindowState(
         );
     }
 
+    public boolean isEmpty() {
+        return windowId.isBlank();
+    }
+
     public static BatchWindowState initialize(String windowId, int windowOffset, int windowLimit, String batchId, String taxYear, String parentWorkflowId) {
         return new BatchWindowState(
                 windowId,

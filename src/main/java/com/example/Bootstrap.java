@@ -31,11 +31,7 @@ public class Bootstrap implements ServiceSetup {
     @Override
     public void onStartup() {
         logger.info("Tax Processing Service starting up");
-
-        var processingConfig = config.getConfig("tax-processing");
-        logger.info("Loaded processing configuration: batch-size={}, window-size={}",
-            processingConfig.getInt("positions-per-window"),
-            processingConfig.getInt("transaction-window-size"));
+        logger.info("config: {}", config);
     }
 
     @Override

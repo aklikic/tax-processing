@@ -12,6 +12,7 @@ import com.typesafe.config.ConfigFactory;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -29,10 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * PostgreSQL integration test for BatchControllerWorkflow using Testcontainers.
  * Tests the complete workflow execution against a real PostgreSQL database.
  *
- * Run with: mvn test -Dtest.integration=true -Dtest=BatchControllerWorkflowPostgreSQLIntegrationTest
  */
 @Testcontainers
-@EnabledIfSystemProperty(named = "test.integration", matches = "true")
+@DisabledIfEnvironmentVariable(named = "docker", matches = "false", disabledReason = "Docker disabled")
 public class BatchControllerWorkflowPostgreSQLIntegrationTest extends TestKitSupport {
 
     @Container
@@ -49,15 +49,12 @@ public class BatchControllerWorkflowPostgreSQLIntegrationTest extends TestKitSup
         // Create test configuration with smaller batch sizes for testing
         var testConfig = ConfigFactory.parseString(String.format("""
             tax-processing {
-                positions-per-window = 3
+                positions-per-window = 2
                 position-init-batch-size = 2
-                transaction-microbatch-size = 2
+                positions-per-batch = 2
                 transaction-window-size = 5
-                max-parallel-sub-workflows = 6
-                completion-window = 2
-                emergency-threshold = 2
                 position-idempotency-cache-size = 100
-                max-parallel-windows = 3
+                max-parallel-windows = 2
                 database {
                     enable = true
                     host = "%s"

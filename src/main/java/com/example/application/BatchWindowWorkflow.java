@@ -46,6 +46,7 @@ public class BatchWindowWorkflow extends Workflow<BatchWindowState> {
             .stepTimeout(BatchWindowWorkflow::loadWindowStep, Duration.ofSeconds(60))
             .stepTimeout(BatchWindowWorkflow::initializePositionsStep, Duration.ofSeconds(30))
             .stepTimeout(BatchWindowWorkflow::launchTransactionProcessingStep, Duration.ofMinutes(5))
+            .stepTimeout(BatchWindowWorkflow::notifyParentStep, Duration.ofMinutes(1))
             .defaultStepRecovery(maxRetries(2).failoverTo(BatchWindowWorkflow::errorHandlingStep))
             .build();
     }
@@ -91,8 +92,11 @@ public class BatchWindowWorkflow extends Workflow<BatchWindowState> {
      * Start the complete opening balance batch processing.
      */
     public Effect<Done> start(StartBatchCommand command) {
+        if(!currentState().isEmpty()){
+            logger.error("Starting already started workflow: {}", commandContext().workflowId());
+            return effects().reply(Done.getInstance());
+        }
         logger.info("Starting: {}", commandContext().workflowId());
-
         return effects()
             .updateState(BatchWindowState.initialize(command.windowId(),command.windowOffset(), command.windowLimit(), command.batchId(), command.taxYear(), command.parentWorkflowId()))
             .transitionTo(BatchWindowWorkflow::loadWindowStep)
@@ -227,7 +231,7 @@ public class BatchWindowWorkflow extends Workflow<BatchWindowState> {
                 commandContext().workflowId(), openingBalances.size(), positionIds.size());
 
         // Calculate number of positionBatches based on batch size
-        var positionsPerBatch = processingConfig.transactionMicrobatchSize();
+        var positionsPerBatch = processingConfig.positionsPerBatch();
         var totalPositionBatches = (int) Math.ceil((double) positionIds.size() / positionsPerBatch);
         logger.info("[{}] Using positionsPerBatch {} / totalPositionBatches {}", commandContext().workflowId(), positionsPerBatch, totalPositionBatches);
 

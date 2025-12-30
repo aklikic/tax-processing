@@ -58,7 +58,7 @@ public class PositionProcessingStatusView extends View {
                 accountId,
                 instrumentId,
                 initialized,
-                transactionsProcessed,
+                    transactionsProcessed + 1,
                 currentUnitsHeld,
                 currentBookCost,
                 totalGainLoss.add(event.gainLossAmount()),
@@ -67,17 +67,19 @@ public class PositionProcessingStatusView extends View {
             );
         }
     }
-
-    public record ProcessingSummary(
-        int totalPositions,
-        int initializedPositions,
-        int positionsWithTransactions,
-        int totalTransactionsProcessed,
-        BigDecimal totalGainLoss,
-        Instant lastActivityTime
-    ) {}
+    public record PositionsProcessingTotalCount(int totalCount){}
 
     public record PositionStatusResult(List<PositionStatusEntry> positions) {}
+
+    public record AccountSummary(
+            String accountId,
+            int totalPositions,
+            int totalTransactions,
+            BigDecimal totalGainLoss,
+            Instant lastActivity
+    ) {}
+
+    public record AccountSummaryResult(List<AccountSummary> accounts) {}
 
     @Consume.FromEventSourcedEntity(PositionEntity.class)
     public static class PositionStatusTableUpdater extends TableUpdater<PositionStatusEntry> {
@@ -155,24 +157,16 @@ public class PositionProcessingStatusView extends View {
     /**
      * Get processing status for all positions.
      */
-    @Query("SELECT * AS positions FROM position_processing_status")
-    public QueryEffect<PositionStatusResult> getAllPositions() {
+    @Query("SELECT total_count() AS totalCount FROM position_processing_status")
+    public QueryEffect<PositionsProcessingTotalCount> getAllPositionsCount() {
         return queryResult();
     }
 
     /**
      * Get processing status for positions of a specific account.
      */
-    @Query("SELECT * AS positions FROM position_processing_status WHERE accountId = :accountId")
-    public QueryEffect<PositionStatusResult> getPositionsByAccount(String accountId) {
-        return queryResult();
-    }
-
-    /**
-     * Get processing status for a specific instrument across all accounts.
-     */
-    @Query("SELECT * AS positions FROM position_processing_status WHERE instrumentId = :instrumentId")
-    public QueryEffect<PositionStatusResult> getPositionsByInstrument(String instrumentId) {
+    @Query("SELECT total_count() AS totalCount FROM position_processing_status WHERE accountId = :accountId")
+    public QueryEffect<PositionsProcessingTotalCount> getPositionsByAccountCount(String accountId) {
         return queryResult();
     }
 
@@ -187,43 +181,16 @@ public class PositionProcessingStatusView extends View {
     /**
      * Get positions that have been initialized but not yet processed any transactions.
      */
-    @Query("SELECT * AS positions FROM position_processing_status WHERE initialized = true AND transactionsProcessed = 0")
-    public QueryEffect<PositionStatusResult> getUnprocessedPositions() {
-        return queryResult();
-    }
-
-    /**
-     * Get all positions for manual aggregation (since Akka SDK doesn't support complex aggregations).
-     * Use this to calculate summary statistics in application code.
-     */
-    @Query("SELECT * AS positions FROM position_processing_status")
-    public QueryEffect<PositionStatusResult> getAllPositionsForSummary() {
-        return queryResult();
-    }
-
-    /**
-     * Get positions that are not yet initialized.
-     */
-    @Query("SELECT * AS positions FROM position_processing_status WHERE initialized = false")
-    public QueryEffect<PositionStatusResult> getUninitialized() {
+    @Query("SELECT total_count() AS totalCount FROM position_processing_status WHERE initialized = true AND transactionsProcessed = 0")
+    public QueryEffect<PositionsProcessingTotalCount> getUnprocessedPositionsCount() {
         return queryResult();
     }
 
     /**
      * Get positions with specific transaction count.
      */
-    @Query("SELECT * AS positions FROM position_processing_status WHERE transactionsProcessed = :count")
-    public QueryEffect<PositionStatusResult> getPositionsWithTransactionCount(int count) {
+    @Query("SELECT total_count() AS totalCount FROM position_processing_status WHERE transactionsProcessed = :count")
+    public QueryEffect<PositionsProcessingTotalCount> getPositionsCountByTransactionCount(int count) {
         return queryResult();
     }
-
-    public record AccountSummary(
-        String accountId,
-        int totalPositions,
-        int totalTransactions,
-        BigDecimal totalGainLoss,
-        Instant lastActivity
-    ) {}
-
-    public record AccountSummaryResult(List<AccountSummary> accounts) {}
 }

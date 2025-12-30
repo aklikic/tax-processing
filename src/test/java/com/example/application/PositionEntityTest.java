@@ -21,11 +21,8 @@ public class PositionEntityTest {
             tax-processing {
                 positions-per-window = 5000
                 position-init-batch-size = 500
-                transaction-microbatch-size = 111
+                positions-per-batch = 111
                 transaction-window-size = 320
-                max-parallel-sub-workflows = 45
-                completion-window = 5
-                emergency-threshold = 10
                 position-idempotency-cache-size = 1000
                 max-parallel-windows = 3
             }
@@ -267,11 +264,12 @@ public class PositionEntityTest {
         // First initialization should succeed
         var result1 = testKit.method(PositionEntity::initializeFromOpeningBalance).invoke(openingBalance);
         assertThat(result1.isReply()).isTrue();
+        assertThat(result1.didPersistEvents()).isTrue();
 
         // Second initialization should fail
         var result2 = testKit.method(PositionEntity::initializeFromOpeningBalance).invoke(openingBalance);
-        assertThat(result2.isError()).isTrue();
-        assertThat(result2.getError()).contains("Position already initialized");
+        assertThat(result2.isReply()).isTrue();
+        assertThat(result2.didPersistEvents()).isFalse();
     }
 
     @Test

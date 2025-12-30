@@ -48,7 +48,7 @@ public class PositionEntity extends EventSourcedEntity<Position, PositionEvent> 
     public Effect<Done> initializeFromOpeningBalance(OpeningBalance openingBalance) {
         if (!currentState().unitsHeld().equals(java.math.BigDecimal.ZERO) ||
             !currentState().bookCost().equals(java.math.BigDecimal.ZERO)) {
-            return effects().error("Position already initialized");
+            return effects().reply(Done.getInstance());
         }
 
         var positionId = openingBalance.positionId();
