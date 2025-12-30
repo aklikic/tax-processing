@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
-  postgresql:
+  postgres-db:
     image: postgres:18
-    container_name: tax-processing-postgresql
-    hostname: postgresql
+    container_name: akka-postgresql
+    hostname: akka-postgresql
+    ports:
+      - 5532:5532
     environment:
-      POSTGRES_DB: TaxProcessing
-      POSTGRES_USER: taxuser
-      POSTGRES_PASSWORD: TaxProcessing123!
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     command: [
       "postgres",
       "-c", "max_connections=200",              # Increased from default 100
@@ -23,23 +21,9 @@ services:
       "-c", "random_page_cost=1.1",             # SSD optimization
       "-c", "effective_io_concurrency=200"      # SSD optimization
     ]
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgresql_data:/var/lib/postgresql/data
-    networks:
-      - tax-processing-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taxuser -d TaxProcessing"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "pg_isready", "-q", "-d", "postgres", "-U", "postgres"]
+      interval: 5s
       retries: 5
-      start_period: 30s
-
-volumes:
-  postgresql_data:
-    driver: local
-
-networks:
-  tax-processing-network:
-    driver: bridge
+      start_period: 5s
+      timeout: 5s

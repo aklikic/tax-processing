@@ -10,6 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Configuration for PostgreSQL R2DBC ConnectionFactory.
@@ -33,6 +36,8 @@ public class DatabaseConfiguration {
         var database = dbConfig.getString("database");
         var username = dbConfig.getString("username");
         var password = dbConfig.getString("password");
+
+        var monitoringDelay = dbConfig.getInt(" monitoring-delay");
 
         var poolConfig = dbConfig.getConfig("pool");
         var initialSize = poolConfig.getInt("initial-size");
@@ -67,6 +72,57 @@ public class DatabaseConfiguration {
             .validationQuery("SELECT 1")
             .build();
 
-        return new ConnectionPool(poolConfiguration);
+        var connectionPool = new ConnectionPool(poolConfiguration);
+
+        // Start pool metrics logging
+        startPoolMetricsLogging(connectionPool, maxSize, monitoringDelay);
+
+        return connectionPool;
+    }
+
+    /**
+     * Starts periodic logging of connection pool metrics.
+     * Logs pool statistics every 30 seconds at INFO level.
+     *
+     * @param connectionPool the connection pool to monitor
+     * @param maxPoolSize maximum pool size for percentage calculations
+     */
+    private static void startPoolMetricsLogging(ConnectionPool connectionPool, int maxPoolSize, int delay) {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
+            Thread t = new Thread(r, "pool-metrics-logger");
+            t.setDaemon(true);
+            return t;
+        });
+
+        scheduler.scheduleWithFixedDelay(() -> {
+            try {
+                var metrics = connectionPool.getMetrics();
+                if (metrics.isPresent()) {
+                    var m = metrics.get();
+                    var utilizationPercent = (double) m.acquiredSize() / maxPoolSize * 100.0;
+
+                    logger.info("R2DBC Pool Stats: " +
+                        "acquired={}/{} ({}%), " +
+                        "idle={}, " +
+                        "pending={}, " +
+                        "allocatedSize={}, " +
+                        "maxAllocatedSize={}, " +
+                        "maxPendingAcquireSize={}",
+                        m.acquiredSize(), maxPoolSize, String.format("%.1f", utilizationPercent),
+                        m.idleSize(),
+                        m.pendingAcquireSize(),
+                        m.allocatedSize(),
+                        m.getMaxAllocatedSize(),
+                        m.getMaxPendingAcquireSize()
+                    );
+                } else {
+                    logger.debug("R2DBC Pool metrics not available");
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to log pool metrics: {}", e.getMessage());
+            }
+        }, delay, delay, TimeUnit.SECONDS); // Log every X seconds
+
+        logger.info("Started R2DBC connection pool metrics logging (every {} seconds)",  delay);
     }
 }

@@ -231,7 +231,7 @@ public class BatchWindowWorkflow extends Workflow<BatchWindowState> {
                 commandContext().workflowId(), openingBalances.size(), positionIds.size());
 
         // Calculate number of positionBatches based on batch size
-        var positionsPerBatch = processingConfig.transactionMicrobatchSize();
+        var positionsPerBatch = processingConfig.positionsPerBatch();
         var totalPositionBatches = (int) Math.ceil((double) positionIds.size() / positionsPerBatch);
         logger.info("[{}] Using positionsPerBatch {} / totalPositionBatches {}", commandContext().workflowId(), positionsPerBatch, totalPositionBatches);
 

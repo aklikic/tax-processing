@@ -10,12 +10,12 @@ import com.typesafe.config.Config;
 public record ProcessingConfig(
     int positionsPerWindow,          // 5,000 - opening balance positions per window
     int positionInitBatchSize,       // 500 - position entities initialized per step
-    int transactionMicrobatchSize,   // 111 - positions per transaction microbatch
+    int positionsPerBatch,           // 111 - positions per batch
     int transactionWindowSize,       // 320 - transactions loaded per query window
-    int maxParallelSubWorkflows,     // 45 - limited by database connection pool
+//    int maxParallelSubWorkflows,     // 45 - limited by database connection pool
     int maxParallelWindows,          // 3 - max concurrent window workflows
-    int completionWindow,            // 5 - start next batch after 5 completions
-    int emergencyThreshold,          // 10 - start immediately if pool drops below this
+//    int completionWindow,            // 5 - start next batch after 5 completions
+//    int emergencyThreshold,          // 10 - start immediately if pool drops below this
     int positionIdempotencyCacheSize // 1000 - max number of processed transaction IDs to keep per position
 ) {
 
@@ -29,12 +29,12 @@ public record ProcessingConfig(
         return new ProcessingConfig(
             processingConfig.getInt("positions-per-window"),
             processingConfig.getInt("position-init-batch-size"),
-            processingConfig.getInt("transaction-microbatch-size"),
+            processingConfig.getInt("positions-per-batch"),
             processingConfig.getInt("transaction-window-size"),
-            processingConfig.getInt("max-parallel-sub-workflows"),
+//            processingConfig.getInt("max-parallel-sub-workflows"),
             processingConfig.getInt("max-parallel-windows"),
-            processingConfig.getInt("completion-window"),
-            processingConfig.getInt("emergency-threshold"),
+//            processingConfig.getInt("completion-window"),
+//            processingConfig.getInt("emergency-threshold"),
             processingConfig.getInt("position-idempotency-cache-size")
         );
     }
@@ -48,10 +48,10 @@ public record ProcessingConfig(
             500,   // positionInitBatchSize
             111,   // transactionMicrobatchSize
             320,   // transactionWindowSize
-            45,    // maxParallelSubWorkflows
+//            45,    // maxParallelSubWorkflows
             3,     // maxParallelWindows
-            5,     // completionWindow
-            10,    // emergencyThreshold
+//            5,     // completionWindow
+//            10,    // emergencyThreshold
             1000   // positionIdempotencyCacheSize
         );
     }
@@ -63,20 +63,12 @@ public record ProcessingConfig(
         if (positionInitBatchSize <= 0) {
             throw new IllegalArgumentException("Position init batch size must be positive");
         }
-        if (transactionMicrobatchSize <= 0) {
-            throw new IllegalArgumentException("Transaction microbatch size must be positive");
+        if (positionsPerBatch <= 0) {
+            throw new IllegalArgumentException("Positions per batch size must be positive");
         }
-        if (maxParallelSubWorkflows <= 0) {
-            throw new IllegalArgumentException("Max parallel sub-workflows must be positive");
-        }
+
         if (maxParallelWindows <= 0) {
             throw new IllegalArgumentException("Max parallel windows must be positive");
-        }
-        if (completionWindow <= 0 || completionWindow > maxParallelSubWorkflows) {
-            throw new IllegalArgumentException("Completion window must be positive and <= max parallel workflows");
-        }
-        if (emergencyThreshold <= 0 || emergencyThreshold >= maxParallelSubWorkflows) {
-            throw new IllegalArgumentException("Emergency threshold must be positive and < max parallel workflows");
         }
         if (positionIdempotencyCacheSize <= 0) {
             throw new IllegalArgumentException("Position idempotency cache size must be positive");

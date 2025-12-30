@@ -64,7 +64,7 @@ public record BatchControllerState(
         }
         public WindowStatus onResult(long windowCompletedPositions, Optional<String> newErrorMessage) {
             return newErrorMessage.map(errMsg -> new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId, WindowProcessingStatus.FAILED, windowCompletedPositions, errMsg))
-                    .orElse(new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId, WindowProcessingStatus.COMPLETED, windowCompletedPositions, errorMessage));
+                    .orElse(new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId, WindowProcessingStatus.COMPLETED, completedPositions+windowCompletedPositions, errorMessage));
         }
     }
 

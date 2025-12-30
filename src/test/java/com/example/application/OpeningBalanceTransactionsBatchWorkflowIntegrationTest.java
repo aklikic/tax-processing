@@ -34,11 +34,8 @@ public class OpeningBalanceTransactionsBatchWorkflowIntegrationTest extends Test
             tax-processing {
                 positions-per-window = 5000
                 position-init-batch-size = 500
-                transaction-microbatch-size = 111
+                positions-per-batch = 111
                 transaction-window-size = 10
-                max-parallel-sub-workflows = 45
-                completion-window = 5
-                emergency-threshold = 10
                 position-idempotency-cache-size = 1000
                 max-parallel-windows = 3
             }

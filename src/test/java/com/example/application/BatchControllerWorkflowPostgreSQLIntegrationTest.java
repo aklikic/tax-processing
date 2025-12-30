@@ -51,11 +51,8 @@ public class BatchControllerWorkflowPostgreSQLIntegrationTest extends TestKitSup
             tax-processing {
                 positions-per-window = 2
                 position-init-batch-size = 2
-                transaction-microbatch-size = 2
+                positions-per-batch = 2
                 transaction-window-size = 5
-                max-parallel-sub-workflows = 6
-                completion-window = 2
-                emergency-threshold = 2
                 position-idempotency-cache-size = 100
                 max-parallel-windows = 2
                 database {

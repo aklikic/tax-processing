@@ -65,7 +65,6 @@ CREATE INDEX IF NOT EXISTS ix_transactions_tax_year_position
 CREATE INDEX IF NOT EXISTS ix_transactions_transaction_id
     ON tax.transactions (transaction_id);
 
--
 -- Add helpful comments
 COMMENT ON TABLE tax.opening_balances IS 'Starting positions for each account-instrument combination by tax year';
 COMMENT ON TABLE tax.transactions IS 'All transactions affecting positions (buys, sells, dividends, etc.)';
