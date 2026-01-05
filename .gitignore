@@ -30,3 +30,5 @@ akka-context/
 .git-bak
 
 .github-bak
+
+app.log

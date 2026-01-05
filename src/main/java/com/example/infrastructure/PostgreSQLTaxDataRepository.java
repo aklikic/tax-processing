@@ -35,15 +35,6 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
     @Override
     public List<OpeningBalance> loadOpeningBalancesBatch(String taxYear, int offset, int limit) {
         logger.debug("Loading opening balances batch: taxYear={}, offset={}, limit={}", taxYear, offset, limit);
-
-        var sql = """
-            SELECT account_id, instrument, units_held, book_cost
-            FROM tax.opening_balances
-            WHERE tax_year = $1
-            ORDER BY id
-            LIMIT $2 OFFSET $3
-            """;
-
         return loadOpeningBalancesBatchAsync(taxYear, offset, limit).join();
     }
 

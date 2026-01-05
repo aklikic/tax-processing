@@ -31,7 +31,6 @@ public class Bootstrap implements ServiceSetup {
     @Override
     public void onStartup() {
         logger.info("Tax Processing Service starting up");
-        logger.info("config: {}", config);
     }
 
     @Override

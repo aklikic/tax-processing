@@ -46,13 +46,6 @@ docker exec -i tax-processing-postgresql psql -U taxuser -d TaxProcessing < post
 
 ## Cleanup
 
-### Clear Specific Tax Year
-```sql
-DECLARE @TaxYear NVARCHAR(4) = '2023';
-DELETE FROM tax.Transactions WHERE TaxYear = @TaxYear;
-DELETE FROM tax.OpeningBalances WHERE TaxYear = @TaxYear;
-```
-
 ### Stop Database
 ```bash
 docker-compose -f docker-compose-postgresql.yml down -v
