@@ -16,7 +16,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * PostgreSQL implementation of TaxDataRepository using R2DBC for reactive database access.
@@ -35,7 +34,7 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
     @Override
     public List<OpeningBalance> loadOpeningBalancesBatch(String taxYear, int offset, int limit) {
         logger.debug("Loading opening balances batch: taxYear={}, offset={}, limit={}", taxYear, offset, limit);
-        return loadOpeningBalancesBatchAsync(taxYear, offset, limit).join();
+        return loadOpeningBalancesBatchFlux(taxYear, offset, limit).collectList().toFuture().join();
     }
 
     @Override
@@ -47,13 +46,13 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
         logger.debug("Loading transactions for positions: count={}, taxYear={}, offset={}, limit={}",
                     positionIds.size(), taxYear, offset, limit);
 
-        return loadTransactionsForPositionsAsync(positionIds, taxYear, offset, limit).join();
+        return loadTransactionsForPositionsFlux(positionIds, taxYear, offset, limit).collectList().toFuture().join();
     }
 
     @Override
     public long countOpeningBalances(String taxYear) {
         logger.debug("Counting opening balances for taxYear={}", taxYear);
-        return countOpeningBalancesAsync(taxYear).join();
+        return countOpeningBalancesMono(taxYear).toFuture().join();
     }
 
     @Override
@@ -63,13 +62,13 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
         }
 
         logger.debug("Counting transactions for positions: count={}, taxYear={}", positionIds.size(), taxYear);
-        return countTransactionsForPositionsAsync(positionIds, taxYear).join();
+        return countTransactionsForPositionsMono(positionIds, taxYear).toFuture().join();
     }
 
-    /**
-     * Async version of loadOpeningBalancesBatch returning CompletableFuture.
-     */
-    public CompletableFuture<List<OpeningBalance>> loadOpeningBalancesBatchAsync(String taxYear, int offset, int limit) {
+    @Override
+    public Flux<OpeningBalance> loadOpeningBalancesBatchFlux(String taxYear, int offset, int limit) {
+        logger.debug("Loading opening balances batch (Flux): taxYear={}, offset={}, limit={}", taxYear, offset, limit);
+
         var sql = """
             SELECT account_id, instrument, units_held, book_cost
             FROM tax.opening_balances
@@ -78,7 +77,7 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             LIMIT $2 OFFSET $3
             """;
 
-        return Mono.usingWhen(
+        return Flux.usingWhen(
                 connectionFactory.create(),
                 connection -> {
                     var statement = connection.createStatement(sql);
@@ -87,20 +86,23 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
                     statement.bind(2, offset);
 
                     return Flux.from(statement.execute())
-                        .flatMap(result -> result.map(this::mapToOpeningBalance))
-                        .collectList();
+                        .flatMap(result -> result.map(this::mapToOpeningBalance));
                 },
                 connection -> connection.close()
             )
-            .doOnError(e -> logger.error("Failed to load opening balances batch", e))
-            .onErrorMap(e -> new RuntimeException("Database error loading opening balances: " + e.getMessage(), e))
-            .toFuture();
+            .doOnError(e -> logger.error("Failed to load opening balances batch (Flux)", e))
+            .onErrorMap(e -> new RuntimeException("Database error loading opening balances: " + e.getMessage(), e));
     }
 
-    /**
-     * Async version of loadTransactionsForPositions returning CompletableFuture.
-     */
-    public CompletableFuture<List<Transaction>> loadTransactionsForPositionsAsync(List<PositionId> positionIds, String taxYear, int offset, int limit) {
+    @Override
+    public Flux<Transaction> loadTransactionsForPositionsFlux(List<PositionId> positionIds, String taxYear, int offset, int limit) {
+        if (positionIds.isEmpty()) {
+            return Flux.empty();
+        }
+
+        logger.debug("Loading transactions for positions (Flux): count={}, taxYear={}, offset={}, limit={}",
+                    positionIds.size(), taxYear, offset, limit);
+
         // Create position filter strings
         var positionFilters = positionIds.stream()
             .map(pos -> pos.accountId() + "|" + pos.instrumentId())
@@ -116,7 +118,7 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             LIMIT $3 OFFSET $4
             """;
 
-        return Mono.usingWhen(
+        return Flux.usingWhen(
                 connectionFactory.create(),
                 connection -> {
                     var statement = connection.createStatement(sql);
@@ -126,20 +128,18 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
                     statement.bind(3, offset);
 
                     return Flux.from(statement.execute())
-                        .flatMap(result -> result.map(this::mapToTransaction))
-                        .collectList();
+                        .flatMap(result -> result.map(this::mapToTransaction));
                 },
                 connection -> connection.close()
             )
-            .doOnError(e -> logger.error("Failed to load transactions for positions", e))
-            .onErrorMap(e -> new RuntimeException("Database error loading transactions: " + e.getMessage(), e))
-            .toFuture();
+            .doOnError(e -> logger.error("Failed to load transactions for positions (Flux)", e))
+            .onErrorMap(e -> new RuntimeException("Database error loading transactions: " + e.getMessage(), e));
     }
 
-    /**
-     * Async version of countOpeningBalances returning CompletableFuture.
-     */
-    public CompletableFuture<Long> countOpeningBalancesAsync(String taxYear) {
+    @Override
+    public Mono<Long> countOpeningBalancesMono(String taxYear) {
+        logger.debug("Counting opening balances (Mono) for taxYear={}", taxYear);
+
         var sql = "SELECT COUNT(*) FROM tax.opening_balances WHERE tax_year = $1";
 
         return Mono.usingWhen(
@@ -155,15 +155,18 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
                 },
                 connection -> connection.close()
             )
-            .doOnError(e -> logger.error("Failed to count opening balances", e))
-            .onErrorReturn(0L)
-            .toFuture();
+            .doOnError(e -> logger.error("Failed to count opening balances (Mono)", e))
+            .onErrorReturn(0L);
     }
 
-    /**
-     * Async version of countTransactionsForPositions returning CompletableFuture.
-     */
-    public CompletableFuture<Long> countTransactionsForPositionsAsync(List<PositionId> positionIds, String taxYear) {
+    @Override
+    public Mono<Long> countTransactionsForPositionsMono(List<PositionId> positionIds, String taxYear) {
+        if (positionIds.isEmpty()) {
+            return Mono.just(0L);
+        }
+
+        logger.debug("Counting transactions for positions (Mono): count={}, taxYear={}", positionIds.size(), taxYear);
+
         // Create position filter strings
         var positionFilters = positionIds.stream()
             .map(pos -> pos.accountId() + "|" + pos.instrumentId())
@@ -190,9 +193,8 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
                 },
                 connection -> connection.close()
             )
-            .doOnError(e -> logger.error("Failed to count transactions for positions", e))
-            .onErrorReturn(0L)
-            .toFuture();
+            .doOnError(e -> logger.error("Failed to count transactions for positions (Mono)", e))
+            .onErrorReturn(0L);
     }
 
     /**

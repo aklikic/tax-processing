@@ -5,6 +5,8 @@ import com.example.domain.OpeningBalance;
 import com.example.domain.PositionId;
 import com.example.domain.Transaction;
 import com.example.domain.TransactionType;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -130,6 +132,26 @@ public class MockTaxDataRepository implements TaxDataRepository {
         return transactions.stream()
             .mapToLong(tx -> positionIds.contains(tx.positionId()) ? 1 : 0)
             .sum();
+    }
+
+    @Override
+    public Flux<OpeningBalance> loadOpeningBalancesBatchFlux(String taxYear, int offset, int limit) {
+        return Flux.fromIterable(loadOpeningBalancesBatch(taxYear, offset, limit));
+    }
+
+    @Override
+    public Flux<Transaction> loadTransactionsForPositionsFlux(List<PositionId> positionIds, String taxYear, int offset, int limit) {
+        return Flux.fromIterable(loadTransactionsForPositions(positionIds, taxYear, offset, limit));
+    }
+
+    @Override
+    public Mono<Long> countOpeningBalancesMono(String taxYear) {
+        return Mono.fromSupplier(() -> countOpeningBalances(taxYear));
+    }
+
+    @Override
+    public Mono<Long> countTransactionsForPositionsMono(List<PositionId> positionIds, String taxYear) {
+        return Mono.fromSupplier(() -> countTransactionsForPositions(positionIds, taxYear));
     }
 
     private List<OpeningBalance> generateOpeningBalances(int numPositions) {
