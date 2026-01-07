@@ -91,7 +91,7 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
         var microBatchCount = (int) Math.ceil((double) command.windowLimit / processingConfig.transactionMicrobatchLimit());
         return effects()
             .updateState(TransactionBatchWindowState.start(command.windowId(),command.windowOffset(), command.windowLimit(), microBatchCount, processingConfig.transactionMicrobatchLimit(), command.batchId(), command.taxYear(), command.parentWorkflowId()))
-            .transitionTo(TransactionBatchWindowWorkflow::startStep)
+            .transitionTo(TransactionBatchWindowWorkflow::startStep2)
             .thenReply(Done.getInstance());
     }
 
@@ -190,6 +190,41 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
                 .updateState(state.withStatus(TransactionBatchWindowState.ProcessingStatus.RUNNING))
                 .thenPause();
     }
+
+
+  @StepName("start")
+  private StepEffect startStep2() {
+    final var state = currentState();
+//    logger.info("[{}] startStep: windowOffset={}, windowLimit={}, microBatchCount={}, transPerMicroBatch={}", commandContext().workflowId(), state.windowOffset(), state.windowLimit(), state.microBatchCount(), state.transPerMicroBatch());
+
+    final var myWorkflowId = commandContext().workflowId();
+
+    var offset = state.windowOffset() + 0 * state.transPerMicroBatch();
+    var limit = state.microBatchCount() * state.transPerMicroBatch();
+    var nextOffset = offset + limit;
+    logger.info("[{}] microBatchFlow: offset={}, limit={}, nextOffset={}", myWorkflowId, offset, limit,nextOffset);
+
+    Source.fromPublisher(taxDataRepository.loadTransactionsFlux(state.taxYear(), offset, limit))
+      .mapAsyncPartitioned(25, 1, t -> t.positionId().toEntityId(), (transaction, positionEntityId) -> {
+        return componentClient.forEventSourcedEntity(positionEntityId)
+          .method(PositionEntity::processTransaction)
+          .invokeAsync(transaction)
+          .thenApply(tr -> Done.getInstance());
+      }).toMat(Sink.ignore(),Keep.right())
+      .run(materializer)
+      .handleAsync((done, throwable) -> {
+        logger.info("[{}] Batch is done: offset={}, limit={}, nextOffset={}", myWorkflowId, offset, limit,nextOffset);
+        var cmd = new CompleteCommand(Optional.ofNullable(throwable).map(Throwable::getMessage));
+        return componentClient.forWorkflow(myWorkflowId).method(TransactionBatchWindowWorkflow::complete).invokeAsync(cmd);
+      });
+
+    //TODO add hook for stop
+
+    logger.info("[{}] startStep streaming running!", commandContext().workflowId());
+    return stepEffects()
+      .updateState(state.withStatus(TransactionBatchWindowState.ProcessingStatus.RUNNING))
+      .thenPause();
+  }
 
 
 

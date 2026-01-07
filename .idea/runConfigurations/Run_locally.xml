@@ -13,6 +13,9 @@
             <list>
               <option value="compile" />
               <option value="exec:java" />
+              <option value="-Dakka.runtime.telemetry.metrics.disabled=false" />
+              <option value="-Dakka.runtime.telemetry.tracing.dev-mode=false" />
+              <option value="-Dconfig.resource=postgres-dev-mode.conf" />
             </list>
           </option>
           <option name="multimoduleDir" />

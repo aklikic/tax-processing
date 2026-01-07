@@ -201,6 +201,7 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
     public Flux<Transaction> loadTransactionsFlux(String taxYear, int offset, int limit) {
         logger.debug("Loading transactions (Flux): taxYear={}, offset={}, limit={}", taxYear, offset, limit);
 
+        //TODO consider loading using global seq nr
         var sql = """
             SELECT transaction_id, account_id, instrument, transaction_date,
                    transaction_type, units, price_per_unit, total_amount
@@ -282,7 +283,8 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             var totalAmount = row.get("total_amount", BigDecimal.class);
 
             // Map string to TransactionType enum
-            var transactionType = mapToTransactionType(transactionTypeStr);
+//            var transactionType = mapToTransactionType(transactionTypeStr);
+            var transactionType = TransactionType.BUY;
 
             // Convert OffsetDateTime to Instant
             var instant = transactionDate.toInstant();
