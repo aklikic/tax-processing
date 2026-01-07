@@ -197,6 +197,59 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             .onErrorReturn(0L);
     }
 
+    @Override
+    public Flux<Transaction> loadTransactionsFlux(String taxYear, int offset, int limit) {
+        logger.debug("Loading transactions (Flux): taxYear={}, offset={}, limit={}", taxYear, offset, limit);
+
+        var sql = """
+            SELECT transaction_id, account_id, instrument, transaction_date,
+                   transaction_type, units, price_per_unit, total_amount
+            FROM tax.transactions
+            WHERE tax_year = $1
+            ORDER BY account_id, instrument, transaction_date, id
+            LIMIT $2 OFFSET $3
+            """;
+
+        return Flux.usingWhen(
+                connectionFactory.create(),
+                connection -> {
+                    var statement = connection.createStatement(sql);
+                    statement.bind(0, taxYear);
+                    statement.bind(1, limit);
+                    statement.bind(2, offset);
+
+                    return Flux.from(statement.execute())
+                        .flatMap(result -> result.map(this::mapToTransaction));
+                },
+                connection -> connection.close()
+            )
+            .doOnError(e -> logger.error("Failed to load transactions (Flux)", e))
+            .onErrorMap(e -> new RuntimeException("Database error loading transactions: " + e.getMessage(), e));
+    }
+
+    @Override
+    public Mono<Long> countTransactionsMono(String taxYear) {
+        logger.debug("Counting all transactions (Mono) for taxYear={}", taxYear);
+
+        var sql = "SELECT COUNT(*) FROM tax.transactions WHERE tax_year = $1";
+
+        return Mono.usingWhen(
+                connectionFactory.create(),
+                connection -> {
+                    var statement = connection.createStatement(sql);
+                    statement.bind(0, taxYear);
+
+                    return Flux.from(statement.execute())
+                        .flatMap(result -> result.map((row, metadata) -> row.get(0, Long.class)))
+                        .next()
+                        .defaultIfEmpty(0L);
+                },
+                connection -> connection.close()
+            )
+            .doOnError(e -> logger.error("Failed to count all transactions (Mono)", e))
+            .onErrorReturn(0L);
+    }
+
     /**
      * Maps a database row to an OpeningBalance domain object.
      */

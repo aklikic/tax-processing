@@ -212,7 +212,9 @@ public record ProcessingConfig(
 
 ## API Usage
 
-### Starting a Tax Processing Batch
+### Opening Balance Batch Processing
+
+#### Starting a Tax Processing Batch
 
 Start processing opening balances for a specific tax year:
 
@@ -233,7 +235,7 @@ curl -X POST http://localhost:9000/tax-processing/batches/batch-2023-001/start \
 }
 ```
 
-### Checking Batch Status
+#### Checking Batch Status
 
 Monitor the progress of a running batch:
 
@@ -249,19 +251,77 @@ curl -X GET http://localhost:9000/tax-processing/batches/batch-2023-001/status
   "status": "PROCESSING",
   "totalPositions": 4400000,
   "totalWindows": 880,
-  "currentWindow": 87,
-  "completedWindows": 86,
-  "progressPercentage": 9.8,
+  "windowStatuses": {
+    "window-0": {"status": "COMPLETED", "completedPositions": 5000},
+    "window-1": {"status": "PROCESSING", "completedPositions": 2500}
+  },
   "errorMessage": null
 }
 ```
 
-**Status Values:**
+### Transaction Batch Processing
+
+#### Starting Transaction Batch Processing
+
+Start processing all transactions for a specific tax year:
+
+```bash
+curl -X POST http://localhost:9000/tax-processing/transaction-batches/tx-batch-2023-001/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taxYear": "2023"
+  }'
+```
+
+**Response:**
+```json
+{
+  "batchId": "tx-batch-2023-001",
+  "taxYear": "2023",
+  "message": "Transaction batch processing started successfully"
+}
+```
+
+#### Checking Transaction Batch Status
+
+Monitor the progress of a running transaction batch:
+
+```bash
+curl -X GET http://localhost:9000/tax-processing/transaction-batches/tx-batch-2023-001/status
+```
+
+**Response:**
+```json
+{
+  "batchId": "tx-batch-2023-001",
+  "taxYear": "2023",
+  "status": "PROCESSING",
+  "totalTransactions": 12300000,
+  "completedTransactions": 2500000,
+  "windowCount": 25,
+  "windowStatuses": {
+    "window-0": {"status": "COMPLETED"},
+    "window-1": {"status": "PROCESSING"},
+    "window-2": {"status": "PENDING"}
+  },
+  "errorMessage": null
+}
+```
+
+### Common Status Values
+
+**Processing Status:**
 - `PENDING` - Batch is queued but not started
 - `INITIALIZING` - Counting and preparing data
-- `PROCESSING` - Actively processing positions and transactions
+- `PROCESSING` - Actively processing positions/transactions
 - `COMPLETED` - All processing finished successfully
 - `FAILED` - Processing failed with an error
+
+**Window Status:**
+- `PENDING` - Window not yet started
+- `PROCESSING` - Window currently being processed
+- `COMPLETED` - Window processing completed successfully
+- `FAILED` - Window processing failed
 
 ### Position Processing Status
 

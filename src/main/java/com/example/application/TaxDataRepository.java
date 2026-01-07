@@ -83,6 +83,8 @@ public interface TaxDataRepository {
      */
     Flux<Transaction> loadTransactionsForPositionsFlux(List<PositionId> positionIds, String taxYear, int offset, int limit);
 
+    Flux<Transaction> loadTransactionsFlux(String taxYear, int offset, int limit);
+
     /**
      * Get the total count of opening balances for a tax year (reactive version).
      * Used for calculating total number of batches needed.
@@ -101,4 +103,6 @@ public interface TaxDataRepository {
      * @return Mono of total number of transaction records
      */
     Mono<Long> countTransactionsForPositionsMono(List<PositionId> positionIds, String taxYear);
+
+    Mono<Long> countTransactionsMono(String taxYear);
 }

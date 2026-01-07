@@ -21,9 +21,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * Mock implementation of TaxDataRepository for development and testing.
  * Generates realistic synthetic data that follows expected patterns and constraints.
  * In production, this would be replaced with a real database implementation.
+ *
+ * Operating Modes:
+ * - GENERATED_DATA: Uses auto-generated opening balances and transactions with pagination
+ * - WINDOWED_TEST: Uses manually configured windows for precise test control
  */
 public class MockTaxDataRepository implements TaxDataRepository {
 
+    public enum Mode {
+        GENERATED_DATA,  // Uses openingBalances/transactions lists with auto-generation
+        WINDOWED_TEST    // Uses window maps with manual test data setup
+    }
+
+    private Mode currentMode;
     private final List<OpeningBalance> openingBalances;
     private final List<Transaction> transactions;
     private final Map<String, List<List<Transaction>>> transactionWindows;
@@ -33,6 +43,7 @@ public class MockTaxDataRepository implements TaxDataRepository {
     private String errorToThrow;
 
     public MockTaxDataRepository(int numPositions, int avgTransactionsPerPosition) {
+        this.currentMode = Mode.GENERATED_DATA;
         this.openingBalances = generateOpeningBalances(numPositions);
         this.transactions = generateTransactions(openingBalances, avgTransactionsPerPosition);
         this.transactionWindows = new ConcurrentHashMap<>();
@@ -45,6 +56,7 @@ public class MockTaxDataRepository implements TaxDataRepository {
      * Constructor for test-specific configuration.
      */
     public MockTaxDataRepository() {
+        this.currentMode = Mode.GENERATED_DATA; // Default mode, can be switched via setup methods
         this.openingBalances = new ArrayList<>();
         this.transactions = new ArrayList<>();
         this.transactionWindows = new ConcurrentHashMap<>();
@@ -67,26 +79,30 @@ public class MockTaxDataRepository implements TaxDataRepository {
             throw new RuntimeException(errorToThrow);
         }
 
-        // Check if we have windowed test data configured
-        var windows = openingBalanceWindows.get(taxYear);
-        if (windows != null) {
-            var windowIndex = openingBalanceWindowCallCounts.getOrDefault(taxYear, 0);
-            openingBalanceWindowCallCounts.put(taxYear, windowIndex + 1);
+        return switch (currentMode) {
+            case WINDOWED_TEST -> {
+                var windows = openingBalanceWindows.get(taxYear);
+                if (windows != null) {
+                    var windowIndex = openingBalanceWindowCallCounts.getOrDefault(taxYear, 0);
+                    openingBalanceWindowCallCounts.put(taxYear, windowIndex + 1);
 
-            if (windowIndex < windows.size()) {
-                return windows.get(windowIndex);
-            } else {
-                return List.of();
+                    if (windowIndex < windows.size()) {
+                        yield windows.get(windowIndex);
+                    } else {
+                        yield List.of();
+                    }
+                } else {
+                    yield List.of(); // No windows configured for this tax year
+                }
             }
-        }
-
-        // Fall back to normal opening balance pagination
-        if (offset >= openingBalances.size()) {
-            return List.of();
-        }
-
-        int endIndex = Math.min(offset + limit, openingBalances.size());
-        return openingBalances.subList(offset, endIndex);
+            case GENERATED_DATA -> {
+                if (offset >= openingBalances.size()) {
+                    yield List.of();
+                }
+                int endIndex = Math.min(offset + limit, openingBalances.size());
+                yield openingBalances.subList(offset, endIndex);
+            }
+        };
     }
 
     @Override
@@ -95,31 +111,36 @@ public class MockTaxDataRepository implements TaxDataRepository {
             throw new RuntimeException(errorToThrow);
         }
 
-        // Check if we have windowed test data configured
-        var windows = transactionWindows.get(taxYear);
-        if (windows != null) {
-            var windowIndex = windowCallCounts.getOrDefault(taxYear, 0);
-            windowCallCounts.put(taxYear, windowIndex + 1);
+        return switch (currentMode) {
+            case WINDOWED_TEST -> {
+                var windows = transactionWindows.get(taxYear);
+                if (windows != null) {
+                    var windowIndex = windowCallCounts.getOrDefault(taxYear, 0);
+                    windowCallCounts.put(taxYear, windowIndex + 1);
 
-            if (windowIndex < windows.size()) {
-                return windows.get(windowIndex);
-            } else {
-                return List.of();
+                    if (windowIndex < windows.size()) {
+                        yield windows.get(windowIndex);
+                    } else {
+                        yield List.of();
+                    }
+                } else {
+                    yield List.of(); // No windows configured for this tax year
+                }
             }
-        }
+            case GENERATED_DATA -> {
+                var filteredTransactions = transactions.stream()
+                    .filter(tx -> positionIds.contains(tx.positionId()))
+                    .sorted(Comparator.comparing(Transaction::dateTime).thenComparing(Transaction::id))
+                    .toList();
 
-        // Fall back to normal transaction filtering
-        var filteredTransactions = transactions.stream()
-            .filter(tx -> positionIds.contains(tx.positionId()))
-            .sorted(Comparator.comparing(Transaction::dateTime).thenComparing(Transaction::id))
-            .toList();
+                if (offset >= filteredTransactions.size()) {
+                    yield List.of();
+                }
 
-        if (offset >= filteredTransactions.size()) {
-            return List.of();
-        }
-
-        int endIndex = Math.min(offset + limit, filteredTransactions.size());
-        return filteredTransactions.subList(offset, endIndex);
+                int endIndex = Math.min(offset + limit, filteredTransactions.size());
+                yield filteredTransactions.subList(offset, endIndex);
+            }
+        };
     }
 
     @Override
@@ -152,6 +173,26 @@ public class MockTaxDataRepository implements TaxDataRepository {
     @Override
     public Mono<Long> countTransactionsForPositionsMono(List<PositionId> positionIds, String taxYear) {
         return Mono.fromSupplier(() -> countTransactionsForPositions(positionIds, taxYear));
+    }
+
+    @Override
+    public Flux<Transaction> loadTransactionsFlux(String taxYear, int offset, int limit) {
+        // Load all transactions for the tax year without position filtering
+        var allTransactions = transactions.stream()
+            .sorted(Comparator.comparing(Transaction::dateTime).thenComparing(Transaction::id))
+            .toList();
+
+        if (offset >= allTransactions.size()) {
+            return Flux.empty();
+        }
+
+        int endIndex = Math.min(offset + limit, allTransactions.size());
+        return Flux.fromIterable(allTransactions.subList(offset, endIndex));
+    }
+
+    @Override
+    public Mono<Long> countTransactionsMono(String taxYear) {
+        return Mono.fromSupplier(() -> (long) transactions.size());
     }
 
     private List<OpeningBalance> generateOpeningBalances(int numPositions) {
@@ -239,8 +280,10 @@ public class MockTaxDataRepository implements TaxDataRepository {
     /**
      * Setup specific transaction windows for testing.
      * Each list represents what should be returned for subsequent calls.
+     * Switches to WINDOWED_TEST mode.
      */
     public void setupTransactions(String taxYear, List<List<Transaction>> windows) {
+        this.currentMode = Mode.WINDOWED_TEST;
         transactionWindows.put(taxYear, windows);
         windowCallCounts.clear();
     }
@@ -248,17 +291,14 @@ public class MockTaxDataRepository implements TaxDataRepository {
     /**
      * Setup specific opening balance windows for testing.
      * Each list represents what should be returned for subsequent calls.
+     * Switches to WINDOWED_TEST mode.
      */
     public void setupOpeningBalances(String taxYear, List<List<OpeningBalance>> windows) {
+        this.currentMode = Mode.WINDOWED_TEST;
         openingBalanceWindows.put(taxYear, windows);
         openingBalanceWindowCallCounts.clear();
 
-        // Calculate total count for this tax year
-        var totalCount = windows.stream()
-            .mapToInt(List::size)
-            .sum();
-
-        // Clear and populate the main opening balances list for counting
+        // In windowed mode, flatten windows for count operations
         openingBalances.clear();
         for (var window : windows) {
             openingBalances.addAll(window);
@@ -280,9 +320,10 @@ public class MockTaxDataRepository implements TaxDataRepository {
     }
 
     /**
-     * Clear all test data.
+     * Clear all test data and reset to GENERATED_DATA mode.
      */
     public void clearData() {
+        this.currentMode = Mode.GENERATED_DATA;
         openingBalances.clear();
         transactions.clear();
         transactionWindows.clear();
@@ -292,12 +333,19 @@ public class MockTaxDataRepository implements TaxDataRepository {
         errorToThrow = null;
     }
 
+    /**
+     * Add opening balance to the generated data list.
+     * Only works in GENERATED_DATA mode.
+     */
     public void addOpeningBalance(OpeningBalance openingBalance) {
+        if (currentMode != Mode.GENERATED_DATA) {
+            throw new IllegalStateException("addOpeningBalance() only works in GENERATED_DATA mode. Current mode: " + currentMode);
+        }
         openingBalances.add(openingBalance);
     }
 
     /**
-     * Reset all test configuration.
+     * Reset all test configuration but keep current mode.
      */
     public void reset() {
         transactionWindows.clear();
@@ -305,5 +353,12 @@ public class MockTaxDataRepository implements TaxDataRepository {
         openingBalanceWindows.clear();
         openingBalanceWindowCallCounts.clear();
         errorToThrow = null;
+    }
+
+    /**
+     * Get current operating mode for debugging.
+     */
+    public Mode getCurrentMode() {
+        return currentMode;
     }
 }

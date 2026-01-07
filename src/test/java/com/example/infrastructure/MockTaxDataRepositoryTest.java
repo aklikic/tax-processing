@@ -15,196 +15,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Unit tests for MockTaxDataRepository.
- * Tests data generation, pagination, and test-specific configuration.
+ * Basic tests for MockTaxDataRepository focusing on mode switching and core functionality.
+ * Mode-specific tests are in MockTaxDataRepositoryGeneratedModeTest and MockTaxDataRepositoryWindowedModeTest.
  */
 public class MockTaxDataRepositoryTest {
 
-    private MockTaxDataRepository repository;
-
-    @BeforeEach
-    void setUp() {
-        repository = new MockTaxDataRepository(100, 3); // 100 positions, 3 transactions each
-    }
-
-    @Test
-    public void shouldGenerateCorrectNumberOfOpeningBalances() {
-        var balances = repository.getAllOpeningBalances();
-
-        assertThat(balances).hasSize(100);
-
-        // Verify all have required fields
-        balances.forEach(balance -> {
-            assertThat(balance.accountId()).isNotBlank();
-            assertThat(balance.instrumentId()).isNotBlank();
-            assertThat(balance.openingUnits()).isGreaterThanOrEqualTo(BigDecimal.ZERO);
-            assertThat(balance.openingCost()).isGreaterThanOrEqualTo(BigDecimal.ZERO);
-        });
-    }
-
-    @Test
-    public void shouldGenerateTransactionsForAllPositions() {
-        var transactions = repository.getAllTransactions();
-
-        // Should have approximately 3 transactions per position (some variation)
-        assertThat(transactions).hasSizeBetween(280, 320); // 100 * 3 with variation
-
-        // Verify all transactions have required fields
-        transactions.forEach(tx -> {
-            assertThat(tx.id()).isNotBlank();
-            assertThat(tx.accountId()).isNotBlank();
-            assertThat(tx.instrumentId()).isNotBlank();
-            assertThat(tx.type()).isNotNull();
-            assertThat(tx.dateTime()).isNotNull();
-            assertThat(tx.units()).isGreaterThan(BigDecimal.ZERO);
-            assertThat(tx.price()).isGreaterThan(BigDecimal.ZERO);
-            assertThat(tx.fees()).isGreaterThanOrEqualTo(BigDecimal.ZERO);
-        });
-    }
-
-    @Test
-    public void shouldLoadOpeningBalancesBatchWithPagination() {
-        var taxYear = "2023";
-
-        // First page
-        var firstBatch = repository.loadOpeningBalancesBatch(taxYear, 0, 20);
-        assertThat(firstBatch).hasSize(20);
-
-        // Second page
-        var secondBatch = repository.loadOpeningBalancesBatch(taxYear, 20, 20);
-        assertThat(secondBatch).hasSize(20);
-
-        // Verify no overlap
-        var firstIds = firstBatch.stream().map(b -> b.positionId().toEntityId()).toList();
-        var secondIds = secondBatch.stream().map(b -> b.positionId().toEntityId()).toList();
-        assertThat(firstIds).doesNotContainAnyElementsOf(secondIds);
-
-        // Last page with remaining items
-        var lastBatch = repository.loadOpeningBalancesBatch(taxYear, 80, 30);
-        assertThat(lastBatch).hasSize(20); // Only 20 remaining
-
-        // Out of range
-        var emptyBatch = repository.loadOpeningBalancesBatch(taxYear, 200, 20);
-        assertThat(emptyBatch).isEmpty();
-    }
-
-    @Test
-    public void shouldLoadTransactionsForSpecificPositions() {
-        var balances = repository.getAllOpeningBalances();
-        var firstTwoPositions = balances.subList(0, 2).stream()
-            .map(OpeningBalance::positionId)
-            .toList();
-
-        var transactions = repository.loadTransactionsForPositions(
-            firstTwoPositions, "2023", 0, 10
-        );
-
-        // Should only return transactions for the specified positions
-        transactions.forEach(tx -> {
-            assertThat(firstTwoPositions).contains(tx.positionId());
-        });
-
-        // Verify chronological order
-        for (int i = 1; i < transactions.size(); i++) {
-            var prevDateTime = transactions.get(i - 1).dateTime();
-            var currDateTime = transactions.get(i).dateTime();
-            assertThat(currDateTime).isAfterOrEqualTo(prevDateTime);
-        }
-    }
-
-    @Test
-    public void shouldCountOpeningBalances() {
-        var count = repository.countOpeningBalances("2023");
-        assertThat(count).isEqualTo(100);
-    }
-
-    @Test
-    public void shouldCountTransactionsForPositions() {
-        var balances = repository.getAllOpeningBalances();
-        var allPositions = balances.stream()
-            .map(OpeningBalance::positionId)
-            .toList();
-
-        var count = repository.countTransactionsForPositions(allPositions, "2023");
-
-        // Should match the size of all transactions
-        assertThat(count).isEqualTo(repository.getAllTransactions().size());
-    }
-
-    @Test
-    public void shouldGenerateDataWithDifferentInstruments() {
-        var balances = repository.getAllOpeningBalances();
-
-        // Should have multiple different instruments
-        var uniqueInstruments = balances.stream()
-            .map(OpeningBalance::instrumentId)
-            .distinct()
-            .toList();
-
-        assertThat(uniqueInstruments).hasSizeGreaterThan(5); // At least 6 different instruments
-        assertThat(uniqueInstruments).contains("AAPL", "MSFT", "GOOGL");
-    }
-
-    @Test
-    public void shouldGenerateMultipleInstrumentsPerAccount() {
-        var balances = repository.getAllOpeningBalances();
-
-        // Group by account and check that some accounts have multiple instruments
-        var accountsWithMultipleInstruments = balances.stream()
-            .collect(java.util.stream.Collectors.groupingBy(OpeningBalance::accountId))
-            .entrySet()
-            .stream()
-            .filter(entry -> entry.getValue().size() > 1)
-            .count();
-
-        assertThat(accountsWithMultipleInstruments).isGreaterThan(0);
-    }
-
-    @Test
-    public void shouldGenerateDeterministicData() {
-        // Create two repositories with same parameters
-        var repo1 = new MockTaxDataRepository(50, 2);
-        var repo2 = new MockTaxDataRepository(50, 2);
-
-        var balances1 = repo1.getAllOpeningBalances();
-        var balances2 = repo2.getAllOpeningBalances();
-
-        // Should generate identical data for same parameters
-        assertThat(balances1).hasSize(balances2.size());
-        for (int i = 0; i < balances1.size(); i++) {
-            var b1 = balances1.get(i);
-            var b2 = balances2.get(i);
-            assertThat(b1.accountId()).isEqualTo(b2.accountId());
-            assertThat(b1.instrumentId()).isEqualTo(b2.instrumentId());
-            assertThat(b1.openingUnits()).isEqualTo(b2.openingUnits());
-            assertThat(b1.openingCost()).isEqualTo(b2.openingCost());
-        }
-    }
-
-    @Test
-    public void shouldSortOpeningBalancesByAccountAndInstrument() {
-        var balances = repository.loadOpeningBalancesBatch("2023", 0, 50);
-
-        // Verify sorted order
-        for (int i = 1; i < balances.size(); i++) {
-            var prev = balances.get(i - 1);
-            var curr = balances.get(i);
-
-            int accountComparison = prev.accountId().compareTo(curr.accountId());
-            if (accountComparison == 0) {
-                // Same account, instrument should be in order
-                assertThat(prev.instrumentId()).isLessThanOrEqualTo(curr.instrumentId());
-            } else {
-                // Different account, account should be in order
-                assertThat(accountComparison).isLessThan(0);
-            }
-        }
-    }
+    // === Basic Repository Creation Tests ===
 
     @Test
     public void shouldCreateEmptyRepositoryForTests() {
         var emptyRepo = new MockTaxDataRepository();
 
+        assertThat(emptyRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
         assertThat(emptyRepo.getAllOpeningBalances()).isEmpty();
         assertThat(emptyRepo.getAllTransactions()).isEmpty();
         assertThat(emptyRepo.countOpeningBalances("2023")).isZero();
@@ -212,60 +34,70 @@ public class MockTaxDataRepositoryTest {
     }
 
     @Test
-    public void shouldSetupCustomTransactionWindows() {
-        var emptyRepo = new MockTaxDataRepository();
-        var positionId = new PositionId("ACC001", "AAPL");
+    public void shouldCreateParameterizedRepository() {
+        var repo = new MockTaxDataRepository(10, 2);
 
-        var transaction1 = new Transaction(
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+        assertThat(repo.getAllOpeningBalances()).hasSize(10);
+        assertThat(repo.getAllTransactions()).hasSizeGreaterThan(15); // ~2 per position with variation
+        assertThat(repo.countOpeningBalances("2023")).isEqualTo(10);
+    }
+
+    // === Basic Window Setup Tests ===
+
+    @Test
+    public void shouldSetupBasicTransactionWindows() {
+        var repo = new MockTaxDataRepository();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        var transaction = new Transaction(
             "TX001", "ACC001", "AAPL", TransactionType.BUY,
             Instant.now(), BigDecimal.valueOf(100), BigDecimal.valueOf(150), BigDecimal.valueOf(5)
         );
-        var transaction2 = new Transaction(
-            "TX002", "ACC001", "AAPL", TransactionType.SELL,
-            Instant.now(), BigDecimal.valueOf(50), BigDecimal.valueOf(160), BigDecimal.valueOf(3)
-        );
 
-        // Setup windows
-        emptyRepo.setupTransactions("2023", List.of(
-            List.of(transaction1),
-            List.of(transaction2),
-            List.of() // Empty window
-        ));
+        repo.setupTransactions("2023", List.of(List.of(transaction)));
 
-        // First call should return first window
-        var firstWindow = emptyRepo.loadTransactionsForPositions(
-            List.of(positionId), "2023", 0, 10
-        );
-        assertThat(firstWindow).containsExactly(transaction1);
+        // Should switch to windowed test mode
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
 
-        // Second call should return second window
-        var secondWindow = emptyRepo.loadTransactionsForPositions(
-            List.of(positionId), "2023", 10, 10
+        var result = repo.loadTransactionsForPositions(
+            List.of(new PositionId("ACC001", "AAPL")), "2023", 0, 10
         );
-        assertThat(secondWindow).containsExactly(transaction2);
-
-        // Third call should return empty
-        var thirdWindow = emptyRepo.loadTransactionsForPositions(
-            List.of(positionId), "2023", 20, 10
-        );
-        assertThat(thirdWindow).isEmpty();
+        assertThat(result).containsExactly(transaction);
     }
 
     @Test
-    public void shouldThrowConfiguredError() {
-        var emptyRepo = new MockTaxDataRepository();
+    public void shouldSetupBasicOpeningBalanceWindows() {
+        var repo = new MockTaxDataRepository();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        var balance = new OpeningBalance("ACC001", "AAPL", BigDecimal.valueOf(100), BigDecimal.valueOf(15000));
+        repo.setupOpeningBalances("2023", List.of(List.of(balance)));
+
+        // Should switch to windowed test mode
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        var result = repo.loadOpeningBalancesBatch("2023", 0, 10);
+        assertThat(result).containsExactly(balance);
+    }
+
+    // === Error and Reset Tests ===
+
+    @Test
+    public void shouldHandleErrorConfiguration() {
+        var repo = new MockTaxDataRepository();
         var positionId = new PositionId("ACC001", "AAPL");
 
-        emptyRepo.setupError("Database connection failed");
+        repo.setupError("Database connection failed");
 
-        assertThatThrownBy(() -> emptyRepo.loadTransactionsForPositions(
+        assertThatThrownBy(() -> repo.loadTransactionsForPositions(
             List.of(positionId), "2023", 0, 10
         )).hasMessage("Database connection failed");
 
         // Clear error and verify it works again
-        emptyRepo.clearError();
+        repo.clearError();
 
-        var result = emptyRepo.loadTransactionsForPositions(
+        var result = repo.loadTransactionsForPositions(
             List.of(positionId), "2023", 0, 10
         );
         assertThat(result).isEmpty(); // Empty repo, but no error
@@ -273,27 +105,31 @@ public class MockTaxDataRepositoryTest {
 
     @Test
     public void shouldResetTestConfiguration() {
-        var emptyRepo = new MockTaxDataRepository();
-        var positionId = new PositionId("ACC001", "AAPL");
+        var repo = new MockTaxDataRepository();
 
-        // Setup some test data
-        emptyRepo.setupError("Test error");
-        emptyRepo.setupTransactions("2023", List.of(List.of()));
+        // Setup some test data and switch to windowed mode
+        repo.setupError("Test error");
+        repo.setupTransactions("2023", List.of(List.of()));
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
 
-        // Reset
-        emptyRepo.reset();
+        // Reset should clear error but preserve mode
+        repo.reset();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
 
         // Should not throw error after reset
-        var result = emptyRepo.loadTransactionsForPositions(
-            List.of(positionId), "2023", 0, 10
+        var result = repo.loadTransactionsForPositions(
+            List.of(new PositionId("ACC001", "AAPL")), "2023", 0, 10
         );
         assertThat(result).isEmpty();
     }
+
+    // === Factory Method Tests ===
 
     @Test
     public void shouldCreateDefaultDataRepository() {
         var defaultRepo = MockTaxDataRepository.withDefaultData();
 
+        assertThat(defaultRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
         assertThat(defaultRepo.countOpeningBalances("2023")).isEqualTo(1000);
         assertThat(defaultRepo.getAllTransactions()).hasSizeGreaterThan(2800); // ~3 per position
     }
@@ -302,59 +138,148 @@ public class MockTaxDataRepositoryTest {
     public void shouldCreateScaleTestDataRepository() {
         var scaleRepo = MockTaxDataRepository.withScaleTestData();
 
+        assertThat(scaleRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
         assertThat(scaleRepo.countOpeningBalances("2023")).isEqualTo(5000);
         assertThat(scaleRepo.getAllTransactions()).hasSizeGreaterThan(14000); // ~3 per position
     }
 
-    @Test
-    public void shouldGetTransactionsForSpecificPosition() {
-        var balances = repository.getAllOpeningBalances();
-        var firstPosition = balances.get(0).positionId();
 
-        var positionTransactions = repository.getTransactionsForPosition(firstPosition);
-
-        // All transactions should belong to this position
-        positionTransactions.forEach(tx -> {
-            assertThat(tx.positionId()).isEqualTo(firstPosition);
-        });
-
-        // Should be sorted by date
-        for (int i = 1; i < positionTransactions.size(); i++) {
-            assertThat(positionTransactions.get(i).dateTime())
-                .isAfterOrEqualTo(positionTransactions.get(i - 1).dateTime());
-        }
-    }
+    // === Reactive Method Compatibility Tests ===
 
     @Test
-    public void shouldGenerateReasonableFinancialValues() {
-        var balances = repository.getAllOpeningBalances();
-        var transactions = repository.getAllTransactions();
+    public void shouldProvideConsistentDataBetweenSyncAndReactiveMethods() {
+        var repo = new MockTaxDataRepository(20, 2); // Small dataset for testing
+        var taxYear = "2023";
 
-        // Opening balances should have reasonable values
-        balances.forEach(balance -> {
-            assertThat(balance.openingUnits()).isBetween(BigDecimal.valueOf(100), BigDecimal.valueOf(600));
-            var avgCostPerUnit = balance.openingCost().divide(balance.openingUnits(), 2, java.math.RoundingMode.HALF_UP);
-            assertThat(avgCostPerUnit).isBetween(BigDecimal.valueOf(50), BigDecimal.valueOf(250));
-        });
+        // Test consistency between sync and reactive methods
+        var syncOpeningCount = repo.countOpeningBalances(taxYear);
+        var reactiveOpeningCount = repo.countOpeningBalancesMono(taxYear).block();
+        assertThat(reactiveOpeningCount).isEqualTo(syncOpeningCount);
 
-        // Transactions should have reasonable values
-        transactions.forEach(tx -> {
-            assertThat(tx.units()).isBetween(BigDecimal.valueOf(10), BigDecimal.valueOf(60));
-            assertThat(tx.price()).isBetween(BigDecimal.valueOf(45), BigDecimal.valueOf(145));
-            assertThat(tx.fees()).isBetween(BigDecimal.valueOf(5), BigDecimal.valueOf(15));
-        });
-    }
+        var syncOpeningBalances = repo.loadOpeningBalancesBatch(taxYear, 0, 5);
+        var reactiveOpeningBalances = repo.loadOpeningBalancesBatchFlux(taxYear, 0, 5)
+            .collectList().block();
+        assertThat(reactiveOpeningBalances).containsExactlyElementsOf(syncOpeningBalances);
 
-    @Test
-    public void shouldGenerateVariousTransactionTypes() {
-        var transactions = repository.getAllTransactions();
-
-        var transactionTypes = transactions.stream()
-            .map(Transaction::type)
-            .distinct()
+        var allPositions = repo.getAllOpeningBalances().stream()
+            .map(OpeningBalance::positionId)
+            .limit(5)
             .toList();
 
-        // Should have BUY and SELL at minimum
-        assertThat(transactionTypes).contains(TransactionType.BUY, TransactionType.SELL);
+        var syncTransactionCount = repo.countTransactionsForPositions(allPositions, taxYear);
+        var reactiveTransactionCount = repo.countTransactionsForPositionsMono(allPositions, taxYear).block();
+        assertThat(reactiveTransactionCount).isEqualTo(syncTransactionCount);
+
+        var syncTransactions = repo.loadTransactionsForPositions(allPositions, taxYear, 0, 5);
+        var reactiveTransactions = repo.loadTransactionsForPositionsFlux(allPositions, taxYear, 0, 5)
+            .collectList().block();
+        assertThat(reactiveTransactions).containsExactlyElementsOf(syncTransactions);
+    }
+
+    // === Mode Switching Tests ===
+
+    @Test
+    public void shouldStartInGeneratedDataMode() {
+        var emptyRepo = new MockTaxDataRepository();
+        assertThat(emptyRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        var paramRepo = new MockTaxDataRepository(10, 2);
+        assertThat(paramRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        var defaultRepo = MockTaxDataRepository.withDefaultData();
+        assertThat(defaultRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        var scaleRepo = MockTaxDataRepository.withScaleTestData();
+        assertThat(scaleRepo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+    }
+
+    @Test
+    public void shouldSwitchModesOnSetup() {
+        var repo = new MockTaxDataRepository();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        // Setting up transactions switches mode
+        var transaction = new Transaction("TX001", "ACC001", "AAPL", TransactionType.BUY,
+                Instant.now(), BigDecimal.valueOf(100), BigDecimal.valueOf(150), BigDecimal.TEN);
+        repo.setupTransactions("2023", List.of(List.of(transaction)));
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        // Clear and try with opening balances
+        repo.clearData();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        var balance = new OpeningBalance("ACC001", "AAPL", BigDecimal.valueOf(100), BigDecimal.valueOf(15000));
+        repo.setupOpeningBalances("2023", List.of(List.of(balance)));
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+    }
+
+    @Test
+    public void shouldHandleModeTransitionsCorrectly() {
+        var repo = new MockTaxDataRepository();
+
+        // Start in generated mode
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        // Switch to windowed mode
+        var transaction = new Transaction("TX001", "ACC001", "AAPL", TransactionType.BUY,
+                Instant.now(), BigDecimal.valueOf(100), BigDecimal.valueOf(150), BigDecimal.TEN);
+        repo.setupTransactions("2023", List.of(List.of(transaction)));
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        // Reset preserves windowed mode
+        repo.reset();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        // clearData resets to generated mode
+        repo.clearData();
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+    }
+
+    @Test
+    public void shouldEnforceModeRestrictions() {
+        var repo = new MockTaxDataRepository();
+
+        // Should work in generated data mode
+        var balance = new OpeningBalance("ACC001", "AAPL", BigDecimal.valueOf(100), BigDecimal.valueOf(15000));
+        repo.addOpeningBalance(balance);
+        assertThat(repo.getAllOpeningBalances()).contains(balance);
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        // Switch to windowed test mode
+        repo.setupTransactions("2023", List.of(List.of()));
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        // Should throw exception when trying to add balance in windowed mode
+        var anotherBalance = new OpeningBalance("ACC002", "MSFT", BigDecimal.valueOf(200), BigDecimal.valueOf(25000));
+        assertThatThrownBy(() -> repo.addOpeningBalance(anotherBalance))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("addOpeningBalance() only works in GENERATED_DATA mode")
+            .hasMessageContaining("Current mode: WINDOWED_TEST");
+    }
+
+    @Test
+    public void shouldMaintainModeConsistencyThroughOperations() {
+        var repo = new MockTaxDataRepository();
+
+        // Start in generated mode and verify it persists through normal operations
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+        repo.addOpeningBalance(new OpeningBalance("ACC001", "AAPL", BigDecimal.valueOf(100), BigDecimal.valueOf(15000)));
+        repo.loadOpeningBalancesBatch("2023", 0, 10);
+        repo.countOpeningBalances("2023");
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
+
+        // Switch to windowed mode and verify persistence
+        repo.setupTransactions("2023", List.of(List.of()));
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+        repo.loadTransactionsForPositions(List.of(), "2023", 0, 10);
+        repo.loadOpeningBalancesBatch("2024", 0, 10);
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        // Test reset vs clearData behavior
+        repo.reset(); // Preserves mode
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.WINDOWED_TEST);
+
+        repo.clearData(); // Resets mode
+        assertThat(repo.getCurrentMode()).isEqualTo(MockTaxDataRepository.Mode.GENERATED_DATA);
     }
 }

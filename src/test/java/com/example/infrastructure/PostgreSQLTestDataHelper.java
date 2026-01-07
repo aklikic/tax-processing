@@ -140,7 +140,7 @@ public class PostgreSQLTestDataHelper {
                 VALUES
                 ('TX%s001', 'ACC%s01', 'AAPL', 'BUY', NOW(), 25.00000000, 155.00000000, 2.00, '%s'),
                 ('TX%s002', 'ACC%s02', 'MSFT', 'BUY', NOW(), 20.00000000, 205.00000000, 2.00, '%s'),
-                ('TX%s003', 'ACC%s03', 'GOOGL', 'SELL', NOW(), 10.00000000, 305.00000000, 2.00, '%s')
+                ('TX%s003', 'ACC%s03', 'GOOGL', 'BUY', NOW(), 10.00000000, 305.00000000, 2.00, '%s')
             """, testId, testId, taxYear, testId, testId, taxYear, testId, testId, taxYear));
 
             connection.commit();
@@ -172,8 +172,11 @@ public class PostgreSQLTestDataHelper {
                                         transaction_date, units, price_per_unit, total_amount, tax_year)
                 VALUES
                 ('TX%s01', 'ACC%s01', 'AAPL', 'BUY', NOW(), 10.00000000, 155.00000000, 2.00, '%s'),
-                ('TX%s02', 'ACC%s05', 'NVDA', 'SELL', NOW(), 5.00000000, 405.00000000, 2.00, '%s')
-            """, testId, testId, taxYear, testId, testId, taxYear));
+                ('TX%s02', 'ACC%s01', 'AAPL', 'BUY', NOW(), 5.00000000, 405.00000000, 2.00, '%s'),
+                ('TX%s03', 'ACC%s05', 'NVDA', 'BUY', NOW(), 5.00000000, 405.00000000, 2.00, '%s'),
+                ('TX%s04', 'ACC%s05', 'NVDA', 'BUY', NOW(), 5.00000000, 405.00000000, 2.00, '%s'),
+                ('TX%s05', 'ACC%s05', 'NVDA', 'BUY', NOW(), 5.00000000, 405.00000000, 2.00, '%s')
+            """, testId, testId, taxYear, testId, testId, taxYear, testId, testId, taxYear, testId, testId, taxYear, testId, testId, taxYear));
 
             connection.commit();
         }
