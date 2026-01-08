@@ -41,33 +41,33 @@ public class PositionEntity extends EventSourcedEntity<Position, PositionEvent> 
         );
     }
 
-    /**
-     * Initialize position from opening balance.
-     * Called once when the position entity is first created.
-     */
-    public Effect<Done> initializeFromOpeningBalance(OpeningBalance openingBalance) {
-        if (!currentState().unitsHeld().equals(java.math.BigDecimal.ZERO) ||
-            !currentState().bookCost().equals(java.math.BigDecimal.ZERO)) {
-            return effects().reply(Done.getInstance());
-        }
-
-        var positionId = openingBalance.positionId();
-        if (!positionId.toEntityId().equals(context.entityId())) {
-            return effects().error("Opening balance does not match entity ID");
-        }
-
-        var initialPosition = openingBalance.toInitialPosition(processingConfig.positionIdempotencyCacheSize());
-        var event = new PositionEvent.Initialized(
-            positionId,
-            initialPosition.unitsHeld(),
-            initialPosition.bookCost(),
-            initialPosition.centsPerUnit()
-        );
-
-        return effects()
-            .persist(event)
-            .thenReply(state -> Done.getInstance());
-    }
+//    /**
+//     * Initialize position from opening balance.
+//     * Called once when the position entity is first created.
+//     */
+//    public Effect<Done> initializeFromOpeningBalance(OpeningBalance openingBalance) {
+//        if (!currentState().unitsHeld().equals(java.math.BigDecimal.ZERO) ||
+//            !currentState().bookCost().equals(java.math.BigDecimal.ZERO)) {
+//            return effects().reply(Done.getInstance());
+//        }
+//
+//        var positionId = openingBalance.positionId();
+//        if (!positionId.toEntityId().equals(context.entityId())) {
+//            return effects().error("Opening balance does not match entity ID");
+//        }
+//
+//        var initialPosition = openingBalance.toInitialPosition(processingConfig.positionIdempotencyCacheSize());
+//        var event = new PositionEvent.Initialized(
+//            positionId,
+//            initialPosition.unitsHeld(),
+//            initialPosition.bookCost(),
+//            initialPosition.centsPerUnit()
+//        );
+//
+//        return effects()
+//            .persist(event)
+//            .thenReply(state -> Done.getInstance());
+//    }
 
     /**
      * Process a single transaction against this position.

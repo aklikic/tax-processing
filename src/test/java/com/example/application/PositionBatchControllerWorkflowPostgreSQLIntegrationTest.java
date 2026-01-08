@@ -7,7 +7,6 @@ import akka.javasdk.testkit.TestKitSupport;
 import com.example.domain.PositionBatchControllerState;
 import com.example.domain.PositionId;
 import com.example.domain.ProcessingConfig;
-import com.example.domain.TransactionBatchWindowControllerState;
 import com.example.infrastructure.DatabaseConfiguration;
 import com.example.infrastructure.PostgreSQLTaxDataRepository;
 import com.example.infrastructure.PostgreSQLTestDataHelper;
@@ -46,20 +45,16 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
 
     @Override
     protected TestKit.Settings testKitSettings() {
+
         // Create test configuration with smaller batch sizes for testing
         var testConfig = ConfigFactory.parseString(String.format("""
             tax-processing {
-                positions-per-window = 2
-                position-init-batch-size = 2
-                positions-per-batch = 2
-                transaction-window-size = 5
-                position-idempotency-cache-size = 100
-                max-parallel-windows = 2
-                
-                transactions-per-window = 2
-                transactions-microbatch-limit = 1
-                
-                transactions-batch-parallelism = 25
+               position-number-per-window = 2
+               position-max-parallel-windows = 2
+               position-idempotency-cache-size = 10
+               position-max-completed-windows-to-keep-in-state = 10
+               transactions-batch-limit = 1
+               transactions-batch-parallelism = 25
                                 
                 database {
                     enable = true
@@ -68,7 +63,7 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
                     database = "%s"
                     username = "%s"
                     password = "%s"
-                    monitoring-delay = 20
+                    monitoring-delay = 0
                     ssl-enabled = false
                     pool {
                         initial-size = 2

@@ -58,7 +58,8 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
         PositionBatchControllerState.ProcessingStatus status,
         long totalPositions,
         int totalWindows,
-        Map<String, PositionBatchControllerState.WindowStatus> windowStatuses,
+        int runningWindows,
+        int completedWindows,
         long completedPositions,
         String errorMessage
     ) {}
@@ -91,7 +92,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
         logger.info("Starting OpeningBalanceBatchWorkflow: {}", commandContext().workflowId());
 
         return effects()
-            .updateState(PositionBatchControllerState.initialize(command.batchId(), command.taxYear(), processingConfig.maxParallelWindows(), processingConfig.positionsPerWindow()))
+            .updateState(PositionBatchControllerState.initialize(command.batchId(), command.taxYear(), processingConfig.positionMaxParallelWindows(), processingConfig.positionNumberPerWindow()))
             .transitionTo(PositionBatchControllerWorkflow::initializationStep)
             .thenReply(Done.getInstance());
     }
@@ -107,7 +108,8 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
             state.status(),
             state.totalPositions(),
             state.totalWindows(),
-            state.windowStatuses(),
+            state.getWindowStatusesRunning().size(),
+            state.completedWindows(),
             state.completedPositions(),
             state.errorMessage()
         ));
@@ -129,7 +131,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
         logger.info("[{}] Callback for sub-workflow {} received", commandContext().workflowId(), command.windowId());
 
         // Add completed sub-workflow to state
-        var updatedState = state.onWindowStatusResult(command.windowId(), command.windowCompletedPositions(), Optional.ofNullable(command.errorMessage));
+        var updatedState = state.onWindowStatusResult(command.windowId(), command.windowCompletedPositions(), Optional.ofNullable(command.errorMessage), processingConfig.positionsMaxCompletedWindowsToKeepInState());
 
         // prepare next window batch to launch
         updatedState = updatedState.prepareNextWindowBatchToLaunch();

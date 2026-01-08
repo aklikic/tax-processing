@@ -42,7 +42,7 @@ service:
           name: tax-db-secret
           key: TAX_DB_MONITORING_DELAY
 
-  image:  aklikic/tax-processing:1.0-SNAPSHOT-20260108151209
+  image:  aklikic/tax-processing:1.0-SNAPSHOT-20260108210641
   resources:
     runtime:
       mode: embedded
