@@ -129,4 +129,33 @@ public class PositionBatchControllerStateTest {
         assertThat(newState.windowStatuses().get("2").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
         assertThat(newState.windowStatuses().get("4").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.COMPLETED);
     }
+
+    @Test
+    public void shouldNotGoBackwardsWhenTooManyWindowsRunning() {
+        var windowStatuses = new ConcurrentHashMap<String, PositionBatchControllerState.WindowStatus>();
+
+        // Create scenario where more windows are running than maxParallelWindows allows
+        // This can happen due to config changes or race conditions
+        windowStatuses.put("0", new PositionBatchControllerState.WindowStatus("0", 0, 100, "batch-0", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+        windowStatuses.put("1", new PositionBatchControllerState.WindowStatus("1", 100, 100, "batch-1", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+        windowStatuses.put("2", new PositionBatchControllerState.WindowStatus("2", 200, 100, "batch-2", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+        windowStatuses.put("3", new PositionBatchControllerState.WindowStatus("3", 300, 100, "batch-3", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+        windowStatuses.put("4", new PositionBatchControllerState.WindowStatus("4", 400, 100, "batch-4", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+        windowStatuses.put("5", new PositionBatchControllerState.WindowStatus("5", 500, 100, "batch-5", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+
+        var state = new PositionBatchControllerState(
+            "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
+            2000L, 100, 20, 3, 10, windowStatuses, 600L, 6, null  // maxParallelWindows=3 but 6 windows running
+        );
+
+        // Try to prepare next batch - this should NOT go backwards
+        var newState = state.prepareNextWindowBatchToLaunch();
+
+        // nextWindowId should NOT go backwards
+        assertThat(newState.nextWindowId()).isEqualTo(10); // Should stay the same, not go backwards
+
+        // Should not create any new windows since too many are already running
+        assertThat(newState.windowStatuses()).hasSize(6); // Same size as before
+        assertThat(newState.windowStatuses()).containsOnlyKeys("0", "1", "2", "3", "4", "5"); // Same windows
+    }
 }
