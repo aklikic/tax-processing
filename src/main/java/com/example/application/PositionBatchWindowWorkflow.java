@@ -156,7 +156,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
             logger.error("Starting already started workflow: {}", commandContext().workflowId());
             return effects().reply(Done.getInstance());
         }
-        logger.info("Initializing: {}", commandContext().workflowId());
+        logger.debug("Initializing: {}", commandContext().workflowId());
         return effects()
                 .updateState(PositionBatchWindowState.init(command.positionWindowId(),command.positionWindowOffset(), command.positionWindowLimit(), command.batchId(), command.taxYear(), command.parentWorkflowId()))
                 .transitionTo(PositionBatchWindowWorkflow::initStep)
@@ -166,7 +166,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
     @StepName("init")
     private StepEffect initStep() {
         final var state = currentState();
-        logger.info("initStep: {}", commandContext().workflowId());
+        logger.debug("initStep: {}", commandContext().workflowId());
         var transactionCount = taxDataRepository.countTransactionsForPositionWindow(state.taxYear(), state.positionWindowOffset(), state.positionWindowLimit());
 
         var transactionBatchCount = (int) Math.ceil((double) transactionCount / processingConfig.transactionMicrobatchLimit());
