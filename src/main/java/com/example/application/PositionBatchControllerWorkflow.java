@@ -100,7 +100,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
     /**
      * Get current batch processing status.
      */
-    public Effect<BatchStatusResponse> getStatus() {
+    public ReadOnlyEffect<BatchStatusResponse> getStatus() {
         var state = currentState();
         return effects().reply(new BatchStatusResponse(
             state.batchId(),
