@@ -17,7 +17,9 @@ public record ProcessingConfig(
     int positionIdempotencyCacheSize, // 1000 - max number of processed transaction IDs to keep per position
 
      int transactionsPerWindow,
-    int transactionMicrobatchLimit
+    int transactionMicrobatchLimit,
+
+    int transactionsBatchParallelism
 
 ) {
 
@@ -37,7 +39,8 @@ public record ProcessingConfig(
             processingConfig.getInt("position-idempotency-cache-size"),
 
                 processingConfig.getInt("transactions-per-window"),
-                processingConfig.getInt("transactions-microbatch-limit")
+                processingConfig.getInt("transactions-microbatch-limit"),
+                processingConfig.getInt("transactions-batch-parallelism")
         );
     }
 
@@ -53,7 +56,8 @@ public record ProcessingConfig(
             3,     // maxParallelWindows
             1000,   // positionIdempotencyCacheSize,
             1000,
-            100
+            100,
+                25
         );
     }
 
