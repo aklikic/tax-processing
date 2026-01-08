@@ -32,3 +32,5 @@ akka-context/
 .github-bak
 
 app.log
+
+*.pem

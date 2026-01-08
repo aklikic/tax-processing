@@ -308,6 +308,55 @@ curl -X GET http://localhost:9000/tax-processing/transaction-batches/tx-batch-20
 }
 ```
 
+### Position Batch Processing
+
+#### Starting Position Batch Processing
+
+Start processing positions for a specific tax year:
+
+```bash
+curl -X POST http://localhost:9000/tax-processing/position-batches/pos-batch-2023-001/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taxYear": "2023"
+  }'
+```
+
+**Response:**
+```json
+{
+  "batchId": "pos-batch-2023-001",
+  "taxYear": "2023",
+  "message": "Position batch processing started successfully"
+}
+```
+
+#### Checking Position Batch Status
+
+Monitor the progress of a running position batch:
+
+```bash
+curl -X GET http://localhost:9000/tax-processing/position-batches/pos-batch-2023-001/status
+```
+
+**Response:**
+```json
+{
+  "batchId": "pos-batch-2023-001",
+  "taxYear": "2023",
+  "status": "PROCESSING",
+  "totalPositions": 4400000,
+  "completedPositions": 1500000,
+  "totalWindows": 880,
+  "windowStatuses": {
+    "window-0": {"status": "COMPLETED", "completedPositions": 5000},
+    "window-1": {"status": "PROCESSING", "completedPositions": 3200},
+    "window-2": {"status": "PENDING", "completedPositions": 0}
+  },
+  "errorMessage": null
+}
+```
+
 ### Common Status Values
 
 **Processing Status:**
@@ -337,7 +386,7 @@ curl -X GET http://localhost:9000/api/processing-status/positions/unprocessed/co
 ```
 Get count of positions with specific transaction count
 ```bash
-curl -X GET http://localhost:9000/api/processing-status/positions/transactions/0/count
+curl -X GET http://localhost:9000/api/processing-status/positions/transactions/6/count
 ```
 
 ## Development

@@ -48,9 +48,9 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
     @Override
     public WorkflowSettings settings() {
         return WorkflowSettings.builder()
-            .stepTimeout(TransactionBatchWindowWorkflow::startStep, Duration.ofSeconds(30))
+
             .stepTimeout(TransactionBatchWindowWorkflow::notifyParentStep, Duration.ofMinutes(1))
-            .defaultStepRecovery(maxRetries(2).failoverTo(TransactionBatchWindowWorkflow::errorHandlingStep))
+            .defaultStepRecovery(maxRetries(0).failoverTo(TransactionBatchWindowWorkflow::errorHandlingStep))
             .build();
     }
 
@@ -113,13 +113,13 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
     public Effect<Done> offsetCommit(CommitOffsetCommand command) {
         final var state = currentState();
         if (state.status() != TransactionBatchWindowState.ProcessingStatus.RUNNING) {
-            logger.info("[{}] Ignoring late offsetCommit notification", commandContext().workflowId());
+            logger.error("[{}] Ignoring late offsetCommit notification", commandContext().workflowId());
             return effects().reply(Done.getInstance());
         }
-        logger.info("[{}] Callback for offsetCommit: [{}]", commandContext().workflowId(), command);
+        logger.debug("[{}] Callback for offsetCommit: [{}]", commandContext().workflowId(), command);
 
         return effects()
-                .updateState(state.withOffset(command.offset()))
+                .updateState(state.withMicroBatchOffset(command.offset()))
                 .pause()
                 .thenReply(Done.getInstance());
     }
@@ -128,16 +128,33 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
         final var state = currentState();
 
         if (state.status() != TransactionBatchWindowState.ProcessingStatus.RUNNING) {
-            logger.info("[{}] Ignoring late complete notification", commandContext().workflowId());
+            logger.error("[{}] Ignoring late complete notification", commandContext().workflowId());
             return effects().reply(Done.getInstance());
         }
-        logger.info("[{}] Callback for complete: [{}]", commandContext().workflowId(), command);
+        if(command.errorMessage().isPresent()){
+            logger.error("[{}] Callback error: {}", commandContext().workflowId(), command.errorMessage().get());
+        } else {
+            logger.info("[{}] Callback for complete!", commandContext().workflowId());
+        }
+
 
         if(command.errorMessage().isPresent()){
-            return effects()
-                    .updateState(state.withError(command.errorMessage().get()))
-                    .transitionTo(TransactionBatchWindowWorkflow::notifyParentStep)
-                    .thenReply(Done.getInstance());
+            var updatedState = state.withError(command.errorMessage().get()).withRetriesIncrease();
+            var maxRetries = 2; //TODO add to config
+            if(updatedState.retries() >= maxRetries){
+                return effects()
+                        .updateState(updatedState)
+                        .transitionTo(TransactionBatchWindowWorkflow::notifyParentStep)
+                        .thenReply(Done.getInstance());
+            }else{
+                updatedState = updatedState.withStatus(TransactionBatchWindowState.ProcessingStatus.START);
+                logger.info("[{}] Retry startStep: [{}]", commandContext().workflowId(), updatedState.retries());
+                return effects()
+                        .updateState(updatedState)
+                        .transitionTo(TransactionBatchWindowWorkflow::startStep)
+                        .thenReply(Done.getInstance());
+            }
+
         }else{
             return effects()
                     .updateState(state.withStatus(TransactionBatchWindowState.ProcessingStatus.COMPLETED))
@@ -150,7 +167,9 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
     @StepName("start")
     private StepEffect startStep() {
         final var state = currentState();
-        logger.info("[{}] startStep: windowOffset={}, windowLimit={}, microBatchCount={}, transPerMicroBatch={}", commandContext().workflowId(), state.windowOffset(), state.windowLimit(), state.microBatchCount(), state.transPerMicroBatch());
+
+        var startMicrobatchOffset = state.microBatchOffset() + 1;
+        logger.info("[{}] startStep: windowOffset={}, windowLimit={}, microBatchCount={}, transPerMicroBatch={}, startMicrobatchOffset={}", commandContext().workflowId(), state.windowOffset(), state.windowLimit(), state.microBatchCount(), state.transPerMicroBatch(), startMicrobatchOffset);
 
         final var myWorkflowId = commandContext().workflowId();
 
@@ -158,25 +177,25 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
                 Flow.<Integer>create()
                     .mapAsync( 1, microBatchIndex -> {
                         var offset = state.windowOffset() + microBatchIndex * state.transPerMicroBatch();
-                        var nextOffset = offset + state.transPerMicroBatch();
-                        logger.info("[{}] microBatchFlow: offset={}, transPerMicroBatch={}, transPerMicroBatch={}", myWorkflowId, offset, state.transPerMicroBatch(),nextOffset);
+                        logger.info("[{}] microBatchFlow: offset={}, transPerMicroBatch={}", myWorkflowId, offset, state.transPerMicroBatch());
                         return Source.fromPublisher(taxDataRepository.loadTransactionsFlux(state.taxYear(), offset, state.transPerMicroBatch()))
-                                     .mapAsync(state.transPerMicroBatch(), transaction -> { //TODO mapAsync parallelism doesn't have to be transPerMicroBatch
-                                         var positionEntityId = transaction.positionId().toEntityId();
+                                     .mapAsyncPartitioned(25, 1, t -> t.positionId().toEntityId(),  (transaction, positionEntityId) -> { //TODO mapAsync parallelism doesn't have to be transPerMicroBatch
                                          return componentClient.forEventSourcedEntity(positionEntityId)
                                                  .method(PositionEntity::processTransaction)
                                                  .invokeAsync(transaction)
                                                  .thenApply(tr -> Done.getInstance());
                                      }).toMat(Sink.ignore(),Keep.right())
                                 .run(materializer)
-                                .thenApply(d -> nextOffset);
-                    }).mapAsync(1, nextOffset ->
-                        componentClient.forWorkflow(myWorkflowId).method(TransactionBatchWindowWorkflow::offsetCommit).invokeAsync(new TransactionBatchWindowWorkflow.CommitOffsetCommand(nextOffset))
+                                .thenApply(d -> microBatchIndex);
+                    }).mapAsync(1, microBatchIndex ->
+                        componentClient.forWorkflow(myWorkflowId).method(TransactionBatchWindowWorkflow::offsetCommit).invokeAsync(new TransactionBatchWindowWorkflow.CommitOffsetCommand(microBatchIndex))
                     );
 
         //TODO add hook for stop
+
+
         var run =
-        Source.range(0, state.microBatchCount())
+        Source.range(startMicrobatchOffset, state.microBatchCount())
                 .via(microBatchFlow)
                 .toMat(Sink.ignore(),Keep.right())
                 .run(materializer)
@@ -184,6 +203,43 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
                     var cmd = new CompleteCommand(Optional.ofNullable(e).map(Throwable::getMessage));
                     return componentClient.forWorkflow(myWorkflowId).method(TransactionBatchWindowWorkflow::complete).invokeAsync(cmd);
                 });
+
+        logger.info("[{}] startStep streaming running!", commandContext().workflowId());
+        return stepEffects()
+                .updateState(state.withStatus(TransactionBatchWindowState.ProcessingStatus.RUNNING))
+                .thenPause();
+    }
+
+    @StepName("start2")
+    private StepEffect startStep2() {
+        final var state = currentState();
+//    logger.info("[{}] startStep: windowOffset={}, windowLimit={}, microBatchCount={}, transPerMicroBatch={}", commandContext().workflowId(), state.windowOffset(), state.windowLimit(), state.microBatchCount(), state.transPerMicroBatch());
+
+        final var myWorkflowId = commandContext().workflowId();
+
+//        var offset = state.windowOffset() + 0 * state.transPerMicroBatch();
+        var offset = state.windowOffset();
+//        var limit = state.microBatchCount() * state.transPerMicroBatch();
+        var limit = state.windowLimit();
+        var nextOffset = offset + limit;
+        logger.info("[{}] microBatchFlow: offset={}, limit={}, nextOffset={}", myWorkflowId, offset, limit,nextOffset);
+
+        Source.fromPublisher(taxDataRepository.loadTransactionsFlux(state.taxYear(), offset, limit))
+                .mapAsyncPartitioned(state.transPerMicroBatch(), 1, t -> t.positionId().toEntityId(), (transaction, positionEntityId) -> {
+                    return componentClient.forEventSourcedEntity(positionEntityId)
+                            .method(PositionEntity::processTransaction)
+                            .invokeAsync(transaction)
+                            .thenApply(tr -> Done.getInstance());
+                })
+                .toMat(Sink.ignore(),Keep.right())
+                .run(materializer)
+                .handleAsync((done, throwable) -> {
+                    logger.info("[{}] Batch is done: offset={}, limit={}, nextOffset={}", myWorkflowId, offset, limit,nextOffset);
+                    var cmd = new CompleteCommand(Optional.ofNullable(throwable).map(Throwable::getMessage));
+                    return componentClient.forWorkflow(myWorkflowId).method(TransactionBatchWindowWorkflow::complete).invokeAsync(cmd);
+                });
+
+        //TODO add hook for stop
 
         logger.info("[{}] startStep streaming running!", commandContext().workflowId());
         return stepEffects()
@@ -222,7 +278,7 @@ public class TransactionBatchWindowWorkflow extends Workflow<TransactionBatchWin
     }
     @StepName("error-handling")
     private StepEffect errorHandlingStep() {
-        logger.info("errorHandlingStep for {} window!", commandContext().workflowId());
+        logger.error("errorHandlingStep for {} window!", commandContext().workflowId());
         // Error occurred during processing
         return stepEffects()
             .updateState(currentState().withError("Batch processing failed due to system error"))

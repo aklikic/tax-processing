@@ -26,22 +26,22 @@ docker-compose -f docker-compose-postgresql.yml ps
 
 ```bash
 # Interactive psql session (recommended):
-docker exec -it tax-processing-postgresql psql -U taxuser -d TaxProcessing
+docker exec -it tax-processing-postgresql psql -U postgres -d postgres
 ```
 
 4. **Run schema and data generation**:
 
 Create database:
 ```bash
-docker exec -i tax-processing-postgresql psql -U taxuser -d TaxProcessing < postgresql/01_create_database.sql
+docker exec -i tax-processing-postgresql psql -U postgres -d postgres < postgresql/01_create_database.sql
 ```
 Create schema:
 ```bash
-docker exec -i tax-processing-postgresql psql -U taxuser -d TaxProcessing < postgresql/02_create_schema.sql
+docker exec -i tax-processing-postgresql psql -U postgres -d postgres < postgresql/02_create_schema.sql
 ```
 Generate test data:
 ```bash
-docker exec -i tax-processing-postgresql psql -U taxuser -d TaxProcessing < postgresql/03_generate_test_data.sql
+docker exec -i tax-processing-postgresql psql -U postgres -d postgres < postgresql/03_generate_test_data.sql
 ```
 
 ## Cleanup

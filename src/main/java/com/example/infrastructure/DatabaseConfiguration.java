@@ -75,7 +75,7 @@ public class DatabaseConfiguration {
         var connectionPool = new ConnectionPool(poolConfiguration);
 
         // Start pool metrics logging
-        startPoolMetricsLogging(connectionPool, maxSize, monitoringDelay);
+//        startPoolMetricsLogging(connectionPool, maxSize, monitoringDelay);
 
         return connectionPool;
     }

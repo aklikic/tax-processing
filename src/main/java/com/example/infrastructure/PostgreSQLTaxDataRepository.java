@@ -250,6 +250,89 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             .onErrorReturn(0L);
     }
 
+    @Override
+    public Flux<Transaction> loadTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit,
+                                                              int transactionOffset, int transactionLimit) {
+        logger.debug("Loading transactions for position window: taxYear={}, positionOffset={}, positionLimit={}, " +
+                    "transactionOffset={}, transactionLimit={}",
+                    taxYear, positionOffset, positionLimit, transactionOffset, transactionLimit);
+
+        var sql = """
+            WITH position_window AS (
+                SELECT account_id, instrument
+                FROM tax.opening_balances
+                WHERE tax_year = $1
+                ORDER BY id
+                LIMIT $2 OFFSET $3
+            )
+            SELECT t.transaction_id, t.account_id, t.instrument, t.transaction_date,
+                   t.transaction_type, t.units, t.price_per_unit, t.total_amount
+            FROM tax.transactions t
+            INNER JOIN position_window pw ON t.account_id = pw.account_id AND t.instrument = pw.instrument
+            WHERE t.tax_year = $1
+            ORDER BY t.account_id, t.instrument, t.transaction_date, t.id
+            LIMIT $4 OFFSET $5
+            """;
+
+        return Flux.usingWhen(
+                connectionFactory.create(),
+                connection -> {
+                    var statement = connection.createStatement(sql);
+                    statement.bind(0, taxYear);
+                    statement.bind(1, positionLimit);
+                    statement.bind(2, positionOffset);
+                    statement.bind(3, transactionLimit);
+                    statement.bind(4, transactionOffset);
+
+                    return Flux.from(statement.execute())
+                        .flatMap(result -> result.map((row, metadata) -> this.mapToTransaction(row, metadata)));
+                },
+                connection -> connection.close()
+            )
+            .doOnError(e -> logger.error("Failed to load transactions for position window", e))
+            .onErrorMap(e -> new RuntimeException("Database error loading transactions for position window: " + e.getMessage(), e));
+    }
+
+    @Override
+    public long countTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit) {
+        logger.debug("Counting transactions for position window: taxYear={}, positionOffset={}, positionLimit={}",
+                    taxYear, positionOffset, positionLimit);
+
+        var sql = """
+            WITH position_window AS (
+                SELECT account_id, instrument
+                FROM tax.opening_balances
+                WHERE tax_year = $1
+                ORDER BY id
+                LIMIT $2 OFFSET $3
+            )
+            SELECT COUNT(*)
+            FROM tax.transactions t
+            INNER JOIN position_window pw ON t.account_id = pw.account_id AND t.instrument = pw.instrument
+            WHERE t.tax_year = $1
+            """;
+
+        return Mono.usingWhen(
+                connectionFactory.create(),
+                connection -> {
+                    var statement = connection.createStatement(sql);
+                    statement.bind(0, taxYear);
+                    statement.bind(1, positionLimit);
+                    statement.bind(2, positionOffset);
+
+                    return Flux.from(statement.execute())
+                        .flatMap(result -> result.map((row, metadata) -> row.get(0, Long.class)))
+                        .next()
+                        .defaultIfEmpty(0L);
+                },
+                connection -> connection.close()
+            )
+            .doOnError(e -> logger.error("Failed to count transactions for position window", e))
+            .onErrorReturn(0L)
+            .toFuture()
+            .join();
+    }
+
     /**
      * Maps a database row to an OpeningBalance domain object.
      */

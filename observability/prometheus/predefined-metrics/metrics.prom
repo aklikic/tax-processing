@@ -1,0 +1,2 @@
+kube_namespace_labels{cluster="local-cluster", label_kalix_io_is_project="true", namespace="local-project"} 1
+kalix_service_revision{kalix_region="local-cluster",container="kalix-embedded",namespace="local-project", kalix_service="local-service"} 1

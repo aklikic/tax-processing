@@ -16,7 +16,8 @@ public record TransactionBatchWindowState(
         String taxYear,
         String parentWorkflowId,
         ProcessingStatus status,
-        int transactionOffset,
+        int microBatchOffset,
+        int retries,
         Optional<String> errorMessage
 ) {
 
@@ -36,6 +37,7 @@ public record TransactionBatchWindowState(
             "",
             "",
             ProcessingStatus.PENDING,
+            -1,
             0,
             java.util.Optional.empty()
         );
@@ -56,20 +58,25 @@ public record TransactionBatchWindowState(
                 taxYear,
                 parentWorkflowId,
                 ProcessingStatus.START,
-                windowOffset,
+                -1,
+                0,
                 java.util.Optional.empty()
         );
     }
-    public TransactionBatchWindowState withOffset(int offset) {
-        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit, microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, status, offset, errorMessage);
+    public TransactionBatchWindowState withMicroBatchOffset(int offset) {
+        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit, microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, status, offset, retries, errorMessage);
     }
 
     public TransactionBatchWindowState withStatus(ProcessingStatus processingStatus) {
-        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit,microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, processingStatus, transactionOffset, errorMessage);
+        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit,microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, processingStatus, microBatchOffset, retries, Optional.empty());
     }
 
     public TransactionBatchWindowState withError(String newErrorMessage) {
-        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit, microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, ProcessingStatus.FAILED, transactionOffset, Optional.of(newErrorMessage));
+        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit, microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, ProcessingStatus.FAILED, microBatchOffset, retries, Optional.of(newErrorMessage));
+    }
+
+    public TransactionBatchWindowState withRetriesIncrease() {
+        return new TransactionBatchWindowState(windowId, windowOffset, windowLimit, microBatchCount, transPerMicroBatch, batchId, taxYear, parentWorkflowId, status, microBatchOffset, retries+1, errorMessage);
     }
 
 }

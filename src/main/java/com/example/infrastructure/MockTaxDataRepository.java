@@ -195,6 +195,93 @@ public class MockTaxDataRepository implements TaxDataRepository {
         return Mono.fromSupplier(() -> (long) transactions.size());
     }
 
+    @Override
+    public Flux<Transaction> loadTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit,
+                                                              int transactionOffset, int transactionLimit) {
+        return switch (currentMode) {
+            case WINDOWED_TEST -> {
+                // In windowed mode, delegate to existing transaction window logic
+                // Position offset/limit parameters are ignored in windowed mode
+                var windows = transactionWindows.get(taxYear);
+                if (windows != null) {
+                    var windowIndex = windowCallCounts.getOrDefault(taxYear, 0);
+                    windowCallCounts.put(taxYear, windowIndex + 1);
+
+                    if (windowIndex < windows.size()) {
+                        var windowTransactions = windows.get(windowIndex);
+                        // Apply transaction pagination to the window
+                        if (transactionOffset >= windowTransactions.size()) {
+                            yield Flux.empty();
+                        }
+                        int endIndex = Math.min(transactionOffset + transactionLimit, windowTransactions.size());
+                        yield Flux.fromIterable(windowTransactions.subList(transactionOffset, endIndex));
+                    } else {
+                        yield Flux.empty();
+                    }
+                } else {
+                    yield Flux.empty(); // No windows configured for this tax year
+                }
+            }
+            case GENERATED_DATA -> {
+                // First get the position IDs using offset/limit
+                if (positionOffset >= openingBalances.size()) {
+                    yield Flux.empty();
+                }
+                int positionEndIndex = Math.min(positionOffset + positionLimit, openingBalances.size());
+                var selectedPositions = openingBalances.subList(positionOffset, positionEndIndex)
+                    .stream()
+                    .map(OpeningBalance::positionId)
+                    .toList();
+
+                // Then get transactions for those positions with transaction pagination
+                var filteredTransactions = transactions.stream()
+                    .filter(tx -> selectedPositions.contains(tx.positionId()))
+                    .sorted(Comparator.comparing(Transaction::dateTime).thenComparing(Transaction::id))
+                    .toList();
+
+                if (transactionOffset >= filteredTransactions.size()) {
+                    yield Flux.empty();
+                }
+
+                int transactionEndIndex = Math.min(transactionOffset + transactionLimit, filteredTransactions.size());
+                yield Flux.fromIterable(filteredTransactions.subList(transactionOffset, transactionEndIndex));
+            }
+        };
+    }
+
+    @Override
+    public long countTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit) {
+        return switch (currentMode) {
+            case WINDOWED_TEST -> {
+                // In windowed mode, count all transactions in all configured windows
+                var windows = transactionWindows.get(taxYear);
+                if (windows != null) {
+                    yield windows.stream()
+                        .mapToLong(List::size)
+                        .sum();
+                } else {
+                    yield 0L; // No windows configured for this tax year
+                }
+            }
+            case GENERATED_DATA -> {
+                // First get the position IDs using offset/limit
+                if (positionOffset >= openingBalances.size()) {
+                    yield 0L;
+                }
+                int positionEndIndex = Math.min(positionOffset + positionLimit, openingBalances.size());
+                var selectedPositions = openingBalances.subList(positionOffset, positionEndIndex)
+                    .stream()
+                    .map(OpeningBalance::positionId)
+                    .toList();
+
+                // Then count transactions for those positions
+                yield transactions.stream()
+                    .mapToLong(tx -> selectedPositions.contains(tx.positionId()) ? 1 : 0)
+                    .sum();
+            }
+        };
+    }
+
     private List<OpeningBalance> generateOpeningBalances(int numPositions) {
         var balances = new ArrayList<OpeningBalance>();
         var instruments = List.of("AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "CRM");
