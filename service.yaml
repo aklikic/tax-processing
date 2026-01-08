@@ -1,0 +1,48 @@
+name: tax-processing
+service:
+  env:
+    - name: POSITION_NUMBER_PER_WINDOWS
+      valueFrom:
+        secretKeyRef:
+          name: app-secret
+          key: POSITION_NUMBER_PER_WINDOWS
+    - name: POSITION_MAX_WINDOWS
+      valueFrom:
+        secretKeyRef:
+          name: app-secret
+          key: POSITION_MAX_WINDOWS
+    - name: POSITION_IDEMPOTENCY_CACHE_SIZE
+      valueFrom:
+        secretKeyRef:
+          name: app-secret
+          key: POSITION_IDEMPOTENCY_CACHE_SIZE
+    - name: TRANSACTION_BATCH_LIMIT
+      valueFrom:
+        secretKeyRef:
+          name: app-secret
+          key: TRANSACTION_BATCH_LIMIT
+    - name: TRANSACTION_BATCH_PARALLELISM
+      valueFrom:
+        secretKeyRef:
+          name: app-secret
+          key: TRANSACTION_BATCH_PARALLELISM
+    - name: TAX_DB_HOST
+      valueFrom:
+        secretKeyRef:
+          name: tax-db-secret
+          key: TAX_DB_HOST
+    - name: TAX_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: tax-db-secret
+          key: TAX_DB_PASSWORD
+    - name: TAX_DB_MONITORING_DELAY
+      valueFrom:
+        secretKeyRef:
+          name: tax-db-secret
+          key: TAX_DB_MONITORING_DELAY
+
+  image:  aklikic/tax-processing:1.0-SNAPSHOT-20260108151209
+  resources:
+    runtime:
+      mode: embedded

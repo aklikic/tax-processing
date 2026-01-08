@@ -1,0 +1,39 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus-config.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - '--log.level=debug' # to see scraping logs
+    ports:
+      - "9091:9090"
+
+  # required to feed prometheus with fake metrics required for some dashboard variables to work
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - "--collector.textfile.directory=/predefined-metrics"
+    volumes:
+      - ./prometheus/predefined-metrics:/predefined-metrics:ro
+    ports:
+      - "9100:9100"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana:/etc/grafana/provisioning:ro
+      - ./grafana/dashboard-files:/var/lib/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin

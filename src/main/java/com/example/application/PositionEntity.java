@@ -73,17 +73,13 @@ public class PositionEntity extends EventSourcedEntity<Position, PositionEvent> 
      * Process a single transaction against this position.
      * Transactions must be processed in chronological order for accurate calculations.
      */
-    public Effect<TransactionResult> processTransaction(Transaction transaction) {
+    public Effect<Done> processTransaction(Transaction transaction) {
         try {
             var positionResult = currentState().processTransaction(transaction);
 
             return effects()
                 .persistAll(positionResult.events())
-                .thenReply(state -> new TransactionResult(
-                    transaction.id(),
-                    positionResult.gainLoss(),
-                    state
-                ));
+                .thenReply(state ->  Done.getInstance());
         } catch (IllegalArgumentException | IllegalStateException e) {
             return effects().error("Transaction processing failed: " + e.getMessage());
         }

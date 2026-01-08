@@ -1,0 +1,1038 @@
+{
+   "id": 123,
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 1
+         },
+         "id": 1,
+         "panels": [ ],
+         "title": "Services",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Rate of successful requests per second (reqs/s) over time, by endpoint.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "req/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 2
+         },
+         "id": 2,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate({__name__=~\"kalix_proxy_grpc_requests_total\", kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", grpc_method=~\"$grpc_method\", grpc_status_code=\"0\"}[$__rate_interval])) by (kalix_region, kalix_service, grpc_method) OR sum(irate({__name__=~\"kalix_proxy_http_requests_total\", kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", http_target=~\"$http_target\", http_status_code=~\"(2|3)..\"}[$__rate_interval])) by (kalix_region, kalix_service, http_target)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{grpc_method}}{{http_target}}"
+            }
+         ],
+         "title": "successful requests",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Rate of requests (reqs/s) that raised an error when processing the request, over time, by endpoint.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "req/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 2
+         },
+         "id": 3,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate({__name__=~\"kalix_proxy_grpc_requests_total\", kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", grpc_method=~\"$grpc_method\", grpc_status_code=~\"1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16\"}[$__rate_interval])) by (kalix_region, kalix_service, grpc_method) OR sum(irate({__name__=~\"kalix_proxy_http_requests_total\", kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", http_target=~\"$http_target\", http_status_code=~\"(4|5)..\"}[$__rate_interval])) by (kalix_region, kalix_service, http_target)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{grpc_method}}{{http_target}}"
+            }
+         ],
+         "title": "failed requests",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of calls that fall into each processing time bucket over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 2
+         },
+         "id": 4,
+         "options": {
+            "calculate": false,
+            "legend": {
+               "show": true
+            }
+         },
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_proxy_grpc_request_duration_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\",grpc_method=~\"$grpc_method\"}[$__rate_interval])) by (le) OR sum(irate(kalix_proxy_http_request_duration_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\",http_target=~\"$http_target\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "legendFormat": "__auto"
+            }
+         ],
+         "title": "processing time heapmap",
+         "type": "heatmap"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 9
+         },
+         "id": 5,
+         "panels": [ ],
+         "title": "Agents",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Rate of commands received per second over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "cmd/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 10
+         },
+         "id": 6,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_agent_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", agent_id=~\"$agent\"}[$__rate_interval])) by (kalix_region, kalix_service, agent_id)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{agent_id}}"
+            }
+         ],
+         "title": "agent commands received",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of agent calls that fall into each processing time bucket over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 10
+         },
+         "id": 7,
+         "options": {
+            "calculate": false,
+            "legend": {
+               "show": true
+            }
+         },
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_agent_command_processing_time_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", agent_id=~\"$agent\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "legendFormat": "__auto"
+            }
+         ],
+         "title": "processing time heatmap",
+         "type": "heatmap"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Total token usage over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "tokens"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 10
+         },
+         "id": 8,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(increase(kalix_agent_model_token_input_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", agent_id=~\"$agent\"}[$__rate_interval])) by (kalix_region, kalix_service, agent_id)",
+               "legendFormat": "input - {{kalix_region}} - {{kalix_service}} - {{agent_id}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(increase(kalix_agent_model_token_output_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", agent_id=~\"$agent\"}[$__rate_interval])) by (kalix_region, kalix_service, agent_id)",
+               "legendFormat": "output - {{kalix_region}} - {{kalix_service}} - {{agent_id}}"
+            }
+         ],
+         "title": "model token usage",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 17
+         },
+         "id": 9,
+         "panels": [ ],
+         "title": "Event Sourced Entities",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Rate of commands received per second over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "cmd/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 18
+         },
+         "id": 10,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_eventsourced_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval])) by (kalix_region, kalix_service, entity_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}}"
+            }
+         ],
+         "title": "commands received",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of Event Sourced Entity calls that fall into each processing time bucket over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 18
+         },
+         "id": 11,
+         "options": {
+            "calculate": false,
+            "legend": {
+               "show": true
+            }
+         },
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_eventsourced_command_processing_time_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "legendFormat": "__auto"
+            }
+         ],
+         "title": "processing time heatmap",
+         "type": "heatmap"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Total number of reads when loading from the DB the latest snapshot and the events afterward. \n\nTotal number of writes when persisting the events or the snapshots generated by the entity.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 18
+         },
+         "id": 12,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_eventsourced_loaded_events_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_eventsourced_loaded_snapshots_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"})\n)\n+\n(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_eventsourced_loaded_snapshots_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_eventsourced_loaded_events_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"})\n)\n",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}} - reads"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_eventsourced_persisted_events_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_eventsourced_persisted_replicated_events_total|kalix_eventsourced_persisted_snapshots_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"})\n)\n+\n(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_eventsourced_persisted_replicated_events_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_eventsourced_persisted_events_total|kalix_eventsourced_persisted_snapshots_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"})\n)\n+\n(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_eventsourced_persisted_snapshots_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_eventsourced_persisted_events_total|kalix_eventsourced_persisted_replicated_events_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$event_sourced_entity\"})\n)\n",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}} - writes"
+            }
+         ],
+         "title": "data ops (reads/writes)",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 25
+         },
+         "id": 13,
+         "panels": [ ],
+         "title": "Key Value Entities",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Rate of commands received per second over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 26
+         },
+         "id": 14,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_valueentity_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$key_value_entity\"}[$__rate_interval])) by (kalix_region, kalix_service, entity_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}}"
+            }
+         ],
+         "title": "commands received",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of Key Value Entity calls that fall into each processing time bucket over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 26
+         },
+         "id": 15,
+         "options": {
+            "calculate": false,
+            "legend": {
+               "show": true
+            }
+         },
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_valueentity_command_processing_time_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$key_value_entity\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "legendFormat": "__auto"
+            }
+         ],
+         "title": "processing time heatmap",
+         "type": "heatmap"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Total number of reads when loading its state from the DB. \n\nTotal number of writes when persisting its state in the DB.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 26
+         },
+         "id": 16,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_valueentity_loaded_state_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$key_value_entity\"}[$__rate_interval])) by (kalix_region, kalix_service, entity_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}} - reads"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_valueentity_persisted_states_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$key_value_entity\"}[$__rate_interval])) by (kalix_region, kalix_service, entity_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}} - writes"
+            }
+         ],
+         "title": "data ops (reads/writes)",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 33
+         },
+         "id": 17,
+         "panels": [ ],
+         "title": "Views",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of rows updated per second over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 34
+         },
+         "id": 18,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_view_upsert_rows_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\",view_name=~\"$view\"}[$__rate_interval])) by (kalix_region, kalix_service, view_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{view_name}}"
+            }
+         ],
+         "title": "rows updated",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of query requests received per second over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 34
+         },
+         "id": 19,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_view_query_received_requests_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\",view_name=~\"$view\"}[$__rate_interval])) by (kalix_region, kalix_service, view_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{view_name}}"
+            }
+         ],
+         "title": "query request received",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 41
+         },
+         "id": 20,
+         "panels": [ ],
+         "title": "Workflows",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Rate of commands received per second over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 42
+         },
+         "id": 21,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_workflowentity_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval])) by (kalix_region, kalix_service, entity_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}}"
+            }
+         ],
+         "title": "commands received",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of Workflow calls that fall into each processing time bucket over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 42
+         },
+         "id": 22,
+         "options": {
+            "calculate": false,
+            "legend": {
+               "show": true
+            }
+         },
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_workflowentity_command_total_time_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "legendFormat": "__auto"
+            }
+         ],
+         "title": "processing time heatmap",
+         "type": "heatmap"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Total number of reads when loading from the DB the latest snapshot and the events afterward.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 42
+         },
+         "id": 23,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_workflowentity_loaded_events_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_workflowentity_loaded_snapshots_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"})\n)\n+\n(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_workflowentity_loaded_snapshots_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_workflowentity_loaded_events_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"})\n)\n",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}} - reads"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_workflowentity_persisted_events_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_workflowentity_persisted_replicated_events_total|kalix_workflowentity_persisted_snapshots_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"})\n)\n+\n(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_workflowentity_persisted_replicated_events_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_workflowentity_persisted_events_total|kalix_workflowentity_persisted_snapshots_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"})\n)\n+\n(\n  sum by (kalix_region, kalix_service, entity_name) (irate(kalix_workflowentity_persisted_snapshots_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval]))\nor\n  0 * sum by (kalix_region, kalix_service, entity_name) ({__name__=~\"kalix_workflowentity_persisted_events_total|kalix_workflowentity_persisted_replicated_events_total\",kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"})\n)\n",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{entity_name}} - writes"
+            }
+         ],
+         "title": "data ops (reads/writes)",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 49
+         },
+         "id": 24,
+         "panels": [ ],
+         "title": "Consumers",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "The processing rate of events consumed by a Consumer or a View.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 6,
+            "x": 0,
+            "y": 50
+         },
+         "id": 25,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_projection_completed_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", projection_name=~\"$projection\"}[$__rate_interval])) by (kalix_region, kalix_service, projection_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{projection_name}}"
+            }
+         ],
+         "title": "events consumed",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Number of messages processed that fall into each processing time bucket over time.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 6,
+            "x": 6,
+            "y": 50
+         },
+         "id": 26,
+         "options": {
+            "calculate": false,
+            "legend": {
+               "show": true
+            }
+         },
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_workflowentity_command_total_time_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", entity_name=~\"$workflow_entity\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "legendFormat": "__auto"
+            }
+         ],
+         "title": "processing time heatmap",
+         "type": "heatmap"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "Failures consuming events from a Consumer or a View.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "op/s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 6,
+            "x": 12,
+            "y": 50
+         },
+         "id": 27,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "sum(irate(kalix_projection_failed_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", projection_name=~\"$projection\"}[$__rate_interval])) by (kalix_region, kalix_service, projection_name)",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{projection_name}}"
+            }
+         ],
+         "title": "subscriptions failed",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-local"
+         },
+         "description": "The lag (timestamp difference) between the most recently produced event and the most recently consumed event, for a Consumer or View.",
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 6,
+            "x": 18,
+            "y": 50
+         },
+         "id": 28,
+         "pluginVersion": "v11.4.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus-local"
+               },
+               "expr": "kalix_projection_backlog_lag_seconds{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", projection_name=~\"$projection\"}",
+               "legendFormat": "{{kalix_region}} - {{kalix_service}} - {{projection_name}} - {{projection_key}}"
+            }
+         ],
+         "title": "events backlog lag",
+         "type": "timeseries"
+      }
+   ],
+   "schemaVersion": 39,
+   "tags": [
+      "kalix-managed"
+   ],
+   "templating": {
+      "list": [
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the name of the region.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Region",
+            "multi": true,
+            "name": "kalix_region",
+            "query": "label_values(kalix_service_revision, kalix_region)",
+            "refId": "StandardVariableQuery_kalix_region",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the name of the service.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Service",
+            "multi": true,
+            "name": "kalix_service",
+            "query": "label_values(kalix_service_revision{kalix_region=~\"$kalix_region\"}, kalix_service)",
+            "refId": "StandardVariableQuery_kalix_service",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the component.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Component",
+            "multi": true,
+            "name": "grpc_service",
+            "query": "label_values({__name__=~\"kalix_proxy_http_requests_total|kalix_proxy_grpc_requests_total\", kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\"},grpc_service)",
+            "refId": "StandardVariableQuery_grpc_service",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the HTTP target.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "HTTP Target",
+            "multi": true,
+            "name": "http_target",
+            "query": "label_values(kalix_proxy_http_requests_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", grpc_service=~\"$grpc_service\"},http_target)",
+            "refId": "StandardVariableQuery_http_target",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the GRPC method.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "GRPC Method",
+            "multi": true,
+            "name": "grpc_method",
+            "query": "label_values(kalix_proxy_grpc_requests_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", grpc_service=~\"$grpc_service\"},grpc_method)",
+            "refId": "StandardVariableQuery_grpc_method",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by agent.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Agent",
+            "multi": true,
+            "name": "agent",
+            "query": "label_values(kalix_agent_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\"},agent_id)",
+            "refId": "StandardVariableQuery_agent",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the event-sourced entity.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Event Sourced Entity",
+            "multi": true,
+            "name": "event_sourced_entity",
+            "query": "label_values(kalix_eventsourced_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\"},entity_name)",
+            "refId": "StandardVariableQuery_event_sourced_entity",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the key-value entity.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Key Value Entity",
+            "multi": true,
+            "name": "key_value_entity",
+            "query": "label_values(kalix_valueentity_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\"},entity_name)",
+            "refId": "StandardVariableQuery_key_value_entity",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the view.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "View",
+            "multi": true,
+            "name": "view",
+            "query": "label_values(kalix_view_upsert_rows_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\"},view_name)",
+            "refId": "StandardVariableQuery_view",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the workflow entity.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Workflow Entity",
+            "multi": true,
+            "name": "workflow_entity",
+            "query": "label_values(kalix_workflowentity_received_commands_total{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\"}, entity_name)",
+            "refId": "StandardVariableQuery_workflow_entity",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the consumer projection.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Consumers",
+            "multi": true,
+            "name": "projection",
+            "query": "label_values(kalix_projection_consumer_lag_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", projection_type!=\"replicated_event_sourced_projection\"},projection_name)",
+            "refId": "StandardVariableQuery_projection",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "prometheus-local"
+            },
+            "description": "Filter by the replication projection.",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Replication Projection",
+            "multi": true,
+            "name": "replication_projection",
+            "query": "label_values(kalix_projection_consumer_lag_seconds_bucket{kalix_region=~\"$kalix_region|\", kalix_service=~\"$kalix_service\", projection_type=\"replicated_event_sourced_projection\"},projection_name)",
+            "refId": "StandardVariableQuery_replication_projection",
+            "type": "query"
+         }
+      ]
+   },
+   "time": {
+      "from": "now-6h",
+      "to": "now"
+   },
+   "timezone": "utc",
+   "title": "Service overview",
+   "uid": "overview-prometheus-local",
+   "version": 51
+}

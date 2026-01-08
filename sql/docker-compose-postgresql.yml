@@ -4,12 +4,13 @@ services:
   postgresql:
     image: postgres:18
     container_name: tax-processing-postgresql
-    hostname: postgresql
     environment:
-      POSTGRES_DB: TaxProcessing
-      POSTGRES_USER: taxuser
-      POSTGRES_PASSWORD: TaxProcessing123!
-      PGDATA: /var/lib/postgresql/data/pgdata
+      #      POSTGRES_DB: TaxProcessing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    #      POSTGRES_USER: taxuser
+    #      POSTGRES_PASSWORD: TaxProcessing123!
+    #      PGDATA: /var/lib/postgresql/data/pgdata
     command: [
       "postgres",
       "-c", "max_connections=200",              # Increased from default 100
@@ -25,20 +26,20 @@ services:
     ]
     ports:
       - "5432:5432"
-    volumes:
-      - postgresql_data:/var/lib/postgresql/data
+    #    volumes:
+    #      - postgresql_data:/var/lib/postgresql/data
     networks:
       - tax-processing-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taxuser -d TaxProcessing"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
 
-volumes:
-  postgresql_data:
-    driver: local
+#volumes:
+#  postgresql_data:
+#    driver: local
 
 networks:
   tax-processing-network:

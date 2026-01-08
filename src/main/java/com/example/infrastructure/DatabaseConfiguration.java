@@ -3,6 +3,7 @@ package com.example.infrastructure;
 import com.typesafe.config.Config;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
+import io.r2dbc.postgresql.client.SSLMode;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.pool.ConnectionPool;
 import io.r2dbc.pool.ConnectionPoolConfiguration;
@@ -38,6 +39,7 @@ public class DatabaseConfiguration {
         var password = dbConfig.getString("password");
 
         var monitoringDelay = dbConfig.getInt(" monitoring-delay");
+        var sslEnabled = dbConfig.getBoolean("ssl-enabled");
 
         var poolConfig = dbConfig.getConfig("pool");
         var initialSize = poolConfig.getInt("initial-size");
@@ -57,6 +59,7 @@ public class DatabaseConfiguration {
             .database(database)
             .username(username)
             .password(password)
+            .sslMode(sslEnabled?SSLMode.REQUIRE:SSLMode.DISABLE)
             .build();
 
         var connectionFactory = new PostgresqlConnectionFactory(postgresqlConfig);
@@ -88,6 +91,8 @@ public class DatabaseConfiguration {
      * @param maxPoolSize maximum pool size for percentage calculations
      */
     private static void startPoolMetricsLogging(ConnectionPool connectionPool, int maxPoolSize, int delay) {
+        if(delay < 1)
+            return;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
             Thread t = new Thread(r, "pool-metrics-logger");
             t.setDaemon(true);

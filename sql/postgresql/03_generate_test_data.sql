@@ -10,10 +10,10 @@ SET search_path TO tax, public;
 -- Configuration variables - modify these for different test scenarios
 
 -- Development/Test Configuration
-\set target_opening_balances 500000
+\set target_opening_balances 1000000
 \set target_avg_transactions_per_position 2.8
 
--- Performance Target Configuration
+---- Performance Target Configuration
 -- \set target_opening_balances 4400000
 -- \set target_avg_transactions_per_position 2.8
 

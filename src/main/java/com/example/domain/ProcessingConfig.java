@@ -9,14 +9,18 @@ import com.typesafe.config.Config;
  */
 public record ProcessingConfig(
     int positionsPerWindow,          // 5,000 - opening balance positions per window
+
     int positionInitBatchSize,       // 500 - position entities initialized per step
     int positionsPerBatch,           // 111 - positions per batch
     int transactionWindowSize,       // 320 - transactions loaded per query window
-//    int maxParallelSubWorkflows,     // 45 - limited by database connection pool
     int maxParallelWindows,          // 3 - max concurrent window workflows
-//    int completionWindow,            // 5 - start next batch after 5 completions
-//    int emergencyThreshold,          // 10 - start immediately if pool drops below this
-    int positionIdempotencyCacheSize // 1000 - max number of processed transaction IDs to keep per position
+    int positionIdempotencyCacheSize, // 1000 - max number of processed transaction IDs to keep per position
+
+     int transactionsPerWindow,
+    int transactionMicrobatchLimit,
+
+    int transactionsBatchParallelism
+
 ) {
 
     /**
@@ -31,11 +35,12 @@ public record ProcessingConfig(
             processingConfig.getInt("position-init-batch-size"),
             processingConfig.getInt("positions-per-batch"),
             processingConfig.getInt("transaction-window-size"),
-//            processingConfig.getInt("max-parallel-sub-workflows"),
             processingConfig.getInt("max-parallel-windows"),
-//            processingConfig.getInt("completion-window"),
-//            processingConfig.getInt("emergency-threshold"),
-            processingConfig.getInt("position-idempotency-cache-size")
+            processingConfig.getInt("position-idempotency-cache-size"),
+
+                processingConfig.getInt("transactions-per-window"),
+                processingConfig.getInt("transactions-microbatch-limit"),
+                processingConfig.getInt("transactions-batch-parallelism")
         );
     }
 
@@ -48,11 +53,11 @@ public record ProcessingConfig(
             500,   // positionInitBatchSize
             111,   // transactionMicrobatchSize
             320,   // transactionWindowSize
-//            45,    // maxParallelSubWorkflows
             3,     // maxParallelWindows
-//            5,     // completionWindow
-//            10,    // emergencyThreshold
-            1000   // positionIdempotencyCacheSize
+            1000,   // positionIdempotencyCacheSize,
+            1000,
+            100,
+                25
         );
     }
 
