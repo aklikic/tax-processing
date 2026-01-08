@@ -58,6 +58,8 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
                 
                 transactions-per-window = 2
                 transactions-microbatch-limit = 1
+                
+                transactions-batch-parallelism = 25
                                 
                 database {
                     enable = true
@@ -67,6 +69,7 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
                     username = "%s"
                     password = "%s"
                     monitoring-delay = 20
+                    ssl-enabled = false
                     pool {
                         initial-size = 2
                         max-size = 10
@@ -74,6 +77,7 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
                         max-lifetime = "30 minutes"
                         max-acquire-time = "30 seconds"
                         max-create-connection-time = "30 seconds"
+                    
                     }
                 }
             }

@@ -131,7 +131,8 @@ public record PositionBatchControllerState(
 
     public PositionBatchControllerState prepareNextWindowBatchToLaunch() {
         var windowIdStartInclusive = nextWindowId;
-        var windowIdEndExclusive = windowIdStartInclusive + maxParallelWindows;
+        var alreadyRunning = getWindowStatusesRunning().size();
+        var windowIdEndExclusive = windowIdStartInclusive + maxParallelWindows - alreadyRunning;
         if(windowIdEndExclusive > totalWindows) {
             windowIdEndExclusive = totalWindows;
         }

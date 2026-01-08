@@ -3,6 +3,7 @@ package com.example.infrastructure;
 import com.typesafe.config.Config;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
+import io.r2dbc.postgresql.client.SSLMode;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.pool.ConnectionPool;
 import io.r2dbc.pool.ConnectionPoolConfiguration;
@@ -38,6 +39,7 @@ public class DatabaseConfiguration {
         var password = dbConfig.getString("password");
 
         var monitoringDelay = dbConfig.getInt(" monitoring-delay");
+        var sslEnabled = dbConfig.getBoolean("ssl-enabled");
 
         var poolConfig = dbConfig.getConfig("pool");
         var initialSize = poolConfig.getInt("initial-size");
@@ -57,6 +59,7 @@ public class DatabaseConfiguration {
             .database(database)
             .username(username)
             .password(password)
+            .sslMode(sslEnabled?SSLMode.REQUIRE:SSLMode.DISABLE)
             .build();
 
         var connectionFactory = new PostgresqlConnectionFactory(postgresqlConfig);
@@ -75,7 +78,7 @@ public class DatabaseConfiguration {
         var connectionPool = new ConnectionPool(poolConfiguration);
 
         // Start pool metrics logging
-//        startPoolMetricsLogging(connectionPool, maxSize, monitoringDelay);
+        startPoolMetricsLogging(connectionPool, maxSize, monitoringDelay);
 
         return connectionPool;
     }
