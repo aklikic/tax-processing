@@ -182,7 +182,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
         final var state = currentState();
 
         var startTransactionBatchOffset = state.transactionBatchOffset() + 1;
-        logger.info("[{}] startStep: positionWindowOffset={}, positionWindowLimit={}, transactionBatchCount={}, transactionsPerBatch={}, startTransactionBatchOffset={}",
+        logger.debug("[{}] startStep: positionWindowOffset={}, positionWindowLimit={}, transactionBatchCount={}, transactionsPerBatch={}, startTransactionBatchOffset={}",
                 commandContext().workflowId(), state.positionWindowOffset(), state.positionWindowLimit(), state.transactionBatchCount(), state.transactionsPerBatch(), startTransactionBatchOffset);
 
         final var myWorkflowId = commandContext().workflowId();
@@ -218,7 +218,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
                     return componentClient.forWorkflow(myWorkflowId).method(PositionBatchWindowWorkflow::complete).invokeAsync(cmd);
                 });
 
-        logger.info("[{}] startStep streaming running!", commandContext().workflowId());
+        logger.debug("[{}] startStep streaming running!", commandContext().workflowId());
         return stepEffects()
                 .updateState(state.withStatus(PositionBatchWindowState.ProcessingStatus.RUNNING))
                 .thenPause();
@@ -243,7 +243,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
                state.errorMessage().orElse(null)
         );
 
-        logger.info("[{}] Notifying parent workflow {} of completion.",
+        logger.debug("[{}] Notifying parent workflow {} of completion.",
                 commandContext().workflowId(),
                 state.parentWorkflowId());
 

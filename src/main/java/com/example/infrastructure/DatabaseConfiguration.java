@@ -91,6 +91,8 @@ public class DatabaseConfiguration {
      * @param maxPoolSize maximum pool size for percentage calculations
      */
     private static void startPoolMetricsLogging(ConnectionPool connectionPool, int maxPoolSize, int delay) {
+        if(delay < 1)
+            return;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
             Thread t = new Thread(r, "pool-metrics-logger");
             t.setDaemon(true);
