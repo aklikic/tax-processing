@@ -1,5 +1,6 @@
 package com.example.application;
 
+import akka.javasdk.DependencyProvider;
 import akka.javasdk.client.ComponentClient;
 import akka.javasdk.http.HttpClient;
 import akka.javasdk.testkit.TestKit;
@@ -27,9 +28,19 @@ public class PositionProcessingStatusViewTest {
     private TestKit testKit;
     private ComponentClient componentClient;
 
+    private static final DependencyProvider mockDependencyProvider =
+            new DependencyProvider() {
+                @SuppressWarnings("unchecked")
+                @Override
+                public <T> T getDependency(Class<T> clazz) {
+                    throw new IllegalArgumentException("Unknown dependency type: " + clazz);
+                }
+            };
+
     private TestKit.Settings testKitSettings() {
         return TestKit.Settings.DEFAULT
-            .withEventSourcedEntityIncomingMessages(PositionEntity.class);
+            .withEventSourcedEntityIncomingMessages(PositionEntity.class)
+                .withDependencyProvider(mockDependencyProvider);
     }
 
     @BeforeEach

@@ -6,36 +6,33 @@ A high-performance tax year batch processing system built with Akka SDK for calc
 
 ```mermaid
 graph TD
-    A[Start Tax Processing] --> B[BatchControllerWorkflow]
+    A[Start Position Batch Processing] --> B[PositionBatchControllerWorkflow]
 
-    B --> B1[Count Total Opening Balances<br/>Calculate Windows]
-    B1 --> B2[Launch Window Processing<br/>Sequential Windows]
+    B --> B1[Count Total Opening Balances<br/>Calculate Position Windows]
+    B1 --> B2[Launch Position Window Processing<br/>Parallel Windows]
 
-    B2 --> C[BatchWindowWorkflow<br/>Window 0, 1, 2...]
-    C --> C1[Load Opening Balance Window<br/>5,000 records per window]
-    C1 --> C2[Initialize Position Entities<br/>Batch size: 500]
-    C2 --> C3{More positions<br/>in window?}
-    C3 -->|Yes| C2
-    C3 -->|No| C4[Group Positions into Microbatches<br/>1,000 positions each]
+    B2 --> C[PositionBatchWindowWorkflow<br/>Window 0, 1, 2...]
+    C --> C1[Count Transactions for Position Window<br/>Calculate Transaction Batches]
+    C1 --> C2[Start Reactive Stream Processing]
 
-    C4 --> D1[Launch Transaction Processing<br/>Parallel Microbatches]
+    C2 --> D[Transaction Batch Stream]
+    D --> D1[Load Transactions via Subquery<br/>Position Window + Transaction Offset/Limit]
+    D1 --> D2[Parallel Transaction Processing<br/>mapAsyncPartitioned by Position]
 
-    D1 --> E[OpeningBalanceTransactionsBatchWorkflow<br/>Per Microbatch]
-    E --> E1[Load Transactions<br/>for position batch]
-    E1 --> E2[Process Transactions<br/>to PositionEntity]
-    E2 --> E3{More transaction<br/>windows?}
-    E3 -->|Yes| E1
-    E3 -->|No| E4[Microbatch Complete]
+    D2 --> E[PositionEntity<br/>Account-Instrument]
+    E --> E1[Process Transaction]
+    E1 --> E2[Emit Events]
+    E2 --> F1[Book Cost Adjusted Event]
+    E2 --> F2[Gain/Loss Incurred Event]
 
-    E2 --> F[PositionEntity<br/>Account-Instrument]
-    F --> F1[Book Cost Adjusted Event]
-    F --> F2[Gain/Loss Incurred Event]
+    D2 --> D3[Transaction Batch Complete]
+    D3 --> D4[Commit Batch Offset<br/>Update Progress]
+    D4 --> D5{More Transaction<br/>Batches?}
+    D5 -->|Yes| D1
+    D5 -->|No| C3[Complete Position Window<br/>All Batches Processed]
 
-    E4 --> D2{All microbatches<br/>complete?}
-    D2 -->|No| D1
-    D2 -->|Yes| C5[Window Complete]
-
-    C5 --> B3{More windows<br/>to process?}
+    C3 --> C4[Notify Parent Workflow]
+    C4 --> B3{More Position<br/>Windows?}
     B3 -->|Yes| B2
     B3 -->|No| G[Processing Complete]
 ```
@@ -44,269 +41,191 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant BCW as BatchControllerWorkflow
+    participant PBC as PositionBatchControllerWorkflow
     participant DB as SQL Database
-    participant BWW as BatchWindowWorkflow
+    participant PBW as PositionBatchWindowWorkflow
+    participant Stream as Akka Streams
     participant PE as PositionEntity
-    participant TBW as OpeningBalanceTransactionsBatch<br/>Workflow
     participant PC as PositionEventConsumer
     participant MB as Message Broker
 
-    Note over BCW: Count Total Opening Balances
-    BCW->>DB: Count Opening Balances for Tax Year
-    DB-->>BCW: Total Count (4.4M positions)
+    Note over PBC: Count Total Opening Balances
+    PBC->>DB: Count Opening Balances for Tax Year
+    DB-->>PBC: Total Count (e.g., 4.4M positions)
+    PBC->>PBC: Calculate Position Windows
 
-    loop For each window (sequential processing)
-        BCW->>BWW: Launch Window Processing
-        Note over BWW: Process Opening Balance Window
-        BWW->>DB: Load Opening Balances Window (5,000 records)
-        DB-->>BWW: Opening Balances List
+    loop For each position window (parallel processing)
+        PBC->>PBW: Launch Position Window Processing
+        Note over PBW: Initialize Position Window
 
-        Note over BWW: Initialize Position Entities
-        loop Initialize in batches of 500
-            BWW->>PE: Initialize Position Entities
-            PE-->>BWW: Batch Initialized
+        PBW->>DB: Count Transactions for Position Window
+        DB-->>PBW: Transaction Count
+        PBW->>PBW: Calculate Transaction Batches
+
+        Note over PBW: Start Reactive Stream Processing
+        PBW->>Stream: Create Transaction Batch Stream
+
+        loop For each transaction batch (sequential in stream)
+            Stream->>DB: Load Transactions via Subquery<br/>(Position Window + Transaction Offset/Limit)
+            DB-->>Stream: Transaction Batch
+
+            Note over Stream: Parallel Processing by Position
+            Stream->>PE: Process Transactions<br/>(mapAsyncPartitioned by Position)
+            PE->>PE: Update Book Cost & Units
+            PE->>PE: Emit Events
+            PE-->>Stream: Transaction Batch Processing Complete
+
+            Note over PE: Emit Events
+            PE->>PC: Position Events (via Akka)
+            PC->>MB: Publish to Topic (book-cost-events)
+
+            Note over Stream: After Each Batch
+            Stream->>PBW: Commit Transaction Batch Offset
+            PBW->>PBW: Update Progress Tracking
         end
 
-        Note over BWW: Group into Position Microbatches (1,000 each)
-        Note over BWW: Launch Transaction Processing (5 parallel)
-
-        loop For each microbatch (5 parallel)
-            BWW->>TBW: Start Transaction Processing
-            Note over TBW: Process Transactions for Position Batch
-
-            loop Transaction windows for this batch
-                TBW->>DB: Load Transactions (window of 280)
-                DB-->>TBW: Transaction List
-
-                loop For each transaction
-                    TBW->>PE: Process Transaction
-                    PE-->>TBW: Transaction Processed
-                    Note over PE: Emit BookCostAdjusted/<br/>GainLossIncurred Events
-                    PE->>PC: Position Events (via Akka)
-                    PC->>MB: Publish to Topic (book-cost-events)
-                end
-            end
-
-            TBW->>BWW: Position Batch Complete
-        end
-
-        BWW->>BCW: Window Complete
-        Note over BWW: All microbatches in window complete
+        Note over PBW: All Transaction Batches Complete
+        PBW->>PBW: Complete Processing
+        PBW->>PBC: Position Window Complete
     end
 
-    Note over BCW: All windows complete
+    Note over PBC: All Position Windows Complete
 ```
 
 ## Processing Flow
 
-The system uses a **3-level workflow architecture** for optimal resource management and scalability:
+The system uses a **2-level workflow architecture with Akka Streams** for optimal resource management and scalability:
 
-### Level 1: BatchControllerWorkflow (Main Orchestrator)
-   - Counts total opening balances and calculates number of windows
-   - Launches window processing workflows sequentially
+### Level 1: PositionBatchControllerWorkflow (Main Orchestrator)
+   - Counts total opening balances for the tax year
+   - Calculates number of position windows based on `position-number-per-window` configuration
+   - Launches position window workflows in parallel (controlled by `position-max-parallel-windows`)
    - Coordinates overall batch progress and status reporting
+   - Uses callback-based coordination for window completion
 
-### Level 2: BatchWindowWorkflow (Window Processor)
-   - Processes one window of opening balances (configurable batch size)
-   - Loads opening balances from SQL database
-   - Initializes PositionEntity instances in batches
-   - Groups positions into microbatches for parallel transaction processing
-   - Launches parallel transaction processing workflows
-   - Waits for all microbatches to complete before notifying parent
+### Level 2: PositionBatchWindowWorkflow (Reactive Stream Processor)
+   - Processes transactions for a specific position window using Akka Streams
+   - Counts transactions for the position window to calculate transaction batches
+   - Creates a reactive stream that processes transaction batches sequentially
+   - Uses `loadTransactionsForPositionWindow` with subquery-based position selection
+   - Employs `mapAsyncPartitioned` for parallel transaction processing by position
+   - Implements offset-based progress tracking and error handling with retries
+   - Notifies parent workflow upon completion or failure
 
-### Level 3: OpeningBalanceTransactionsBatchWorkflow (Transaction Processor)
-   - Processes transactions for a specific microbatch of positions
-   - Loads transactions in efficient windows from database
-   - Sends transactions to corresponding PositionEntity sequentially
-   - Continues until all transaction windows processed for the microbatch
-
-### Level 4: PositionEntity Processing
-   - Processes transactions sequentially per position
-   - Maintains book cost and units held using FIFO idempotency cache
+### Level 3: PositionEntity Processing
+   - Processes transactions sequentially per position to maintain FIFO ordering
+   - Maintains book cost and units held using idempotency cache
    - Emits events: BookCostAdjusted, GainLossIncurred
+   - Ensures data consistency through event sourcing
 
-### Level 5: Event Publishing *(Planned - Not Yet Implemented)*
+### Level 4: Event Publishing *(Planned - Not Yet Implemented)*
    - PositionEventConsumer consumes from PositionEntity events
    - Publishes processed events to message broker topic
    - Enables real-time downstream processing and analytics
 
-## Optimized Configuration
+## Key Architectural Benefits
 
-### Production ProcessingConfig (Updated)
+**Reactive Streams Processing:**
+- **Backpressure Management**: Akka Streams automatically manages memory usage and prevents overloading
+- **Parallel Processing**: `mapAsyncPartitioned` ensures parallel processing while maintaining per-position ordering
+- **Efficient Database Access**: Subquery-based transaction loading reduces database roundtrips
+- **Progress Tracking**: Offset-based tracking allows for resumable processing and monitoring
+
+**Scalable Design:**
+- **Configurable Parallelism**: Both position windows and transaction processing are configurable
+- **Resource Optimization**: Stream-based processing minimizes memory footprint
+- **Error Resilience**: Built-in retry mechanisms with configurable limits
+- **Monitoring Integration**: Comprehensive logging and progress tracking
+
+## Configuration
+
+### Current ProcessingConfig
 
 ```java
 public record ProcessingConfig(
-    int positionsPerWindow,          // 5,000 - opening balances per window (50 × 100 or 5 × 1,000)
-    int positionInitBatchSize,       // 500 - position entities initialized per step
-    int positionsPerBatch,           // 1,000 - positions per microbatch (increased from 100)
-    int transactionWindowSize,       // 320 - transactions loaded per query window
-    int maxParallelWindows,          // 2 - max concurrent window workflows (increased from 1)
-    int positionIdempotencyCacheSize // 1,000 - FIFO cache size per position
+    int positionNumberPerWindow,      // 500 - positions per window (configurable via POSITION_NUMBER_PER_WINDOWS)
+    int positionMaxParallelWindows,   // 6 - max concurrent window workflows (configurable via POSITION_MAX_WINDOWS)
+    int positionIdempotencyCacheSize, // 10 - FIFO cache size per position (configurable via POSITION_IDEMPOTENCY_CACHE_SIZE)
+    int transactionsBatchLimit,       // 200 - transactions per batch in stream (configurable via TRANSACTION_BATCH_LIMIT)
+    int transactionsBatchParallelism  // 25 - parallel transactions processed per batch (configurable via TRANSACTION_BATCH_PARALLELISM)
 ) {}
+```
+
+### Environment Variables
+
+All configuration parameters can be overridden using environment variables:
+
+```bash
+# Position window configuration
+export POSITION_NUMBER_PER_WINDOWS=500    # Positions per window
+export POSITION_MAX_WINDOWS=6             # Max parallel windows
+
+# Position entity configuration
+export POSITION_IDEMPOTENCY_CACHE_SIZE=10 # Cache size per position
+
+# Transaction processing configuration
+export TRANSACTION_BATCH_LIMIT=200        # Transactions per stream batch
+export TRANSACTION_BATCH_PARALLELISM=25   # Parallel transaction processing
+
+# Database configuration
+export TAX_DB_HOST=localhost
+export TAX_DB_PASSWORD=your_password
+export TAX_DB_SSL_ENABLED=true
+export TAX_DB_MONITORING_DELAY=10
+export TAX_DB_POOL_INIT_SIZE=6
+export TAX_DB_POOL_MAX_SIZE=10
 ```
 
 ### Performance Analysis
 
-**System Constraints**:
-- 50ms persist latency per operation (Akka entity writes)
-- 150 database connection pool limit (PostgreSQL R2DBC)
-- Max 50k concurrent workflows (Akka platform limit)
-- 3-level workflow architecture with coordinated callbacks
+**Current Architecture Performance**:
+- **Position Windows**: 500 positions per window, up to 6 parallel windows
+- **Transaction Processing**: 200 transactions per batch, 25 parallel processing
+- **Total Concurrent Processing**: 6 windows × 500 positions = 3,000 positions simultaneously
+- **Akka Streams Benefits**: Automatic backpressure, memory management, fault tolerance
 
-**3-Level Workflow Capacity** (Updated Configuration):
-- **Level 1**: 1 BatchControllerWorkflow (orchestrator)
-- **Level 2**: 2 BatchWindowWorkflow (maxParallelWindows = 2, increased throughput)
-- **Level 3**: 5 OpeningBalanceTransactionsBatchWorkflows per window (5,000 ÷ 1,000)
+**Database Connection Usage**:
+- **Position Window Queries**: 1 connection per active window (max 6)
+- **Transaction Stream Processing**: Efficient subquery-based loading
+- **Connection Pool**: 10 max connections with 6 initial
+- **SSL Support**: Configurable SSL connections for cloud databases
 
-**Enhanced Performance**:
-- 2 parallel window workflows processing simultaneously
-- 1,000 positions per microbatch (10x increase from previous 100)
-- 5 microbatches per window (reduced from 29)
-- Total concurrent positions: 2 windows × 5,000 positions = 10,000 positions
-- Enhanced connection pool: 150 connections (vs previous 50)
-- Expected TPS: 2,900 positions × 20 TPS per position ÷ 10 position processing time = **5,800 TPS**
+**Scalability Characteristics**:
+- **Reactive Streams**: Built-in backpressure prevents memory overload
+- **Partitioned Processing**: `mapAsyncPartitioned` maintains per-position ordering
+- **Progress Tracking**: Offset-based resumable processing
+- **Error Recovery**: Automatic retries with configurable limits
 
-**Database Connection Usage** (Updated):
-- 2 connections for BatchWindowWorkflows (opening balances, 2 parallel windows)
-- 10 connections for OpeningBalanceTransactionsBatchWorkflows (5 per window × 2 windows)
-- Total active: 12 connections (well within 150 connection limit)
-- Reserve connections: 138 available for other operations and bursts
-
-**Processing Timeline** (Updated):
-- Window size: 5,000 opening balances per window
-- Position initialization: 10 steps × 500 positions × 50ms = 0.5 seconds
-- Transaction processing: Enhanced parallelism with 2 windows and larger batches
-- **Total concurrent positions**: 10,000 (2 windows × 5,000 each)
-- **Windows for 4.4M dataset**: 4.4M ÷ 5,000 = 880 windows
-- **Enhanced throughput**: 2x parallel processing with larger batch sizes
-
-**Enhanced Performance**:
-- **Parallel processing**: 2 windows simultaneously (2x throughput)
-- **Larger batches**: 1,000 positions per microbatch (10x previous size)
-- **Better resource utilization**: 12 of 150 DB connections (8% base utilization)
-- **Improved scalability**: Room for bursts up to 150 connections
+**Resource Optimization**:
+- **Memory Efficient**: Stream-based processing with controlled batching
+- **Connection Efficient**: Subquery-based loading reduces database roundtrips
+- **CPU Efficient**: Configurable parallelism for different deployment environments
+- **Monitoring Ready**: Built-in metrics and progress tracking
 
 ## Performance Targets
 
-| Metric | Updated Configuration | Status |
-|--------|-------------------|--------|
-| Opening Balances | 4.4M with enhanced processing | **✅ EXCEEDS TARGET** (< 2 hours) |
-| Transactions | 12.3M with parallel windows | **✅ EXCEEDS TARGET** (< 2.5 hours) |
-| Concurrent Positions | 10,000 (2 windows × 5,000) | **✅ ENHANCED** (vs 2,900 previous) |
-| Database Connections | 12 of 150 used | **✅ OPTIMIZED** (8% utilization) |
+| Metric | Current Configuration | Optimization |
+|--------|---------------------|--------------|
+| Position Windows | 500 positions/window × 6 parallel | **Configurable** via environment variables |
+| Transaction Batches | 200 transactions/batch × 25 parallel | **Tunable** for different workloads |
+| Database Connections | 6-10 connections (efficient usage) | **SSL-ready** for cloud deployments |
+| Memory Usage | **Stream-controlled** with backpressure | **Predictable** resource consumption |
 
 ### Configuration Benefits
 
-**Enhanced Resource Allocation**:
-- ✅ **Larger microbatches**: 5 × 1,000 positions = 5,000 concurrent per window
-- ✅ **Parallel processing**: 2 windows simultaneously (2x throughput)
-- ✅ **Optimized DB usage**: 8% base utilization with 138 connections available for bursts
-- ✅ **Improved initialization**: 500 position batches reduce steps from 29 to 10
+**Environment-Based Configuration**:
+- ✅ **Flexible Deployment**: All parameters configurable via environment variables
+- ✅ **Cloud-Ready**: SSL database connections with environment-based credentials
+- ✅ **Scalable Processing**: Adjustable parallelism for different environments
+- ✅ **Resource Control**: Tunable batch sizes and connection pools
 
-**Scaling Improvements**:
-- **Enhanced parallelism**: 2 parallel windows vs 1 sequential
-- **Larger position batches**: 1,000 vs 100 positions per microbatch (10x increase)
-- **Better connection efficiency**: 150 connection pool with low base utilization
-- **Faster initialization**: 500 position init batches vs 100
+**Reactive Architecture**:
+- ✅ **Backpressure Management**: Automatic memory and resource protection
+- ✅ **Fault Tolerance**: Built-in retry mechanisms and error handling
+- ✅ **Progress Tracking**: Offset-based resumable processing
+- ✅ **Monitoring Integration**: Comprehensive logging and metrics
 
 ## API Usage
-
-### Opening Balance Batch Processing
-
-#### Starting a Tax Processing Batch
-
-Start processing opening balances for a specific tax year:
-
-```bash
-curl -X POST http://localhost:9000/tax-processing/batches/batch-2023-001/start \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taxYear": "2023"
-  }'
-```
-
-**Response:**
-```json
-{
-  "batchId": "batch-2023-001",
-  "taxYear": "2023",
-  "message": "Batch processing started successfully"
-}
-```
-
-#### Checking Batch Status
-
-Monitor the progress of a running batch:
-
-```bash
-curl -X GET http://localhost:9000/tax-processing/batches/batch-2023-001/status
-```
-
-**Response:**
-```json
-{
-  "batchId": "batch-2023-001",
-  "taxYear": "2023",
-  "status": "PROCESSING",
-  "totalPositions": 4400000,
-  "totalWindows": 880,
-  "windowStatuses": {
-    "window-0": {"status": "COMPLETED", "completedPositions": 5000},
-    "window-1": {"status": "PROCESSING", "completedPositions": 2500}
-  },
-  "errorMessage": null
-}
-```
-
-### Transaction Batch Processing
-
-#### Starting Transaction Batch Processing
-
-Start processing all transactions for a specific tax year:
-
-```bash
-curl -X POST http://localhost:9000/tax-processing/transaction-batches/tx-batch-2023-001/start \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taxYear": "2023"
-  }'
-```
-
-**Response:**
-```json
-{
-  "batchId": "tx-batch-2023-001",
-  "taxYear": "2023",
-  "message": "Transaction batch processing started successfully"
-}
-```
-
-#### Checking Transaction Batch Status
-
-Monitor the progress of a running transaction batch:
-
-```bash
-curl -X GET http://localhost:9000/tax-processing/transaction-batches/tx-batch-2023-001/status
-```
-
-**Response:**
-```json
-{
-  "batchId": "tx-batch-2023-001",
-  "taxYear": "2023",
-  "status": "PROCESSING",
-  "totalTransactions": 12300000,
-  "completedTransactions": 2500000,
-  "windowCount": 25,
-  "windowStatuses": {
-    "window-0": {"status": "COMPLETED"},
-    "window-1": {"status": "PROCESSING"},
-    "window-2": {"status": "PENDING"}
-  },
-  "errorMessage": null
-}
-```
 
 ### Position Batch Processing
 
@@ -391,6 +310,51 @@ curl -X GET http://localhost:9000/api/processing-status/positions/transactions/6
 
 ## Development
 
+### Database Setup
+
+This section explains how to set up and populate the PostgreSQL database for testing the tax processing system.
+
+#### Quick Start
+
+1. **Start the database**:
+```bash
+docker-compose -f docker-compose-postgresql.yml up -d
+```
+
+2. **Wait for database to be ready** (check health status):
+```bash
+docker-compose -f docker-compose-postgresql.yml ps
+```
+
+3. **Connect to database**:
+```bash
+# Interactive psql session (recommended):
+docker exec -it tax-processing-postgresql psql -U postgres -d postgres
+```
+
+4. **Run schema and data generation**:
+
+Docker-based PostgreSQL:
+```bash
+docker exec -i tax-processing-postgresql psql -U postgres -d postgres < postgresql/01_create_database.sql
+docker exec -i tax-processing-postgresql psql -U postgres -d postgres < postgresql/02_create_schema.sql
+docker exec -i tax-processing-postgresql psql -U postgres -d postgres < postgresql/03_generate_test_data.sql
+```
+
+Remote PostgreSQL installation:
+```bash
+psql -h <your-db-host> -p 5432 -U postgres -d postgres -f postgresql/01_create_database.sql
+psql -h <your-db-host> -p 5432 -U postgres -d postgres -f postgresql/02_create_schema.sql
+psql -h <your-db-host> -p 5432 -U postgres -d postgres -f postgresql/03_generate_test_data.sql
+```
+
+#### Database Cleanup
+
+To stop and remove the database:
+```bash
+docker-compose -f docker-compose-postgresql.yml down -v
+```
+
 ### Build and Test
 
 Build your project:
@@ -414,6 +378,25 @@ To start your service locally:
 ```shell
 mvn compile exec:java
 ```
+
+### Observability
+
+To run the observability stack with Grafana and Prometheus monitoring:
+
+```shell
+docker-compose -f docker-grafana-prometheus-monitoring.yml up
+```
+
+This will start:
+- **Grafana** - Data visualization and monitoring dashboards (accessible at http://localhost:3000)
+- **Prometheus** - Metrics collection and storage
+- **Application metrics** - Akka SDK automatically exposes metrics for monitoring
+
+The monitoring stack provides insights into:
+- Application performance metrics
+- JVM and system resource usage
+- Custom business metrics
+- Request/response patterns
 
 ### Testing Infrastructure
 
@@ -441,9 +424,45 @@ mvn clean install -DskipTests
 
 Install the `akka` CLI as documented in [Install Akka CLI](https://doc.akka.io/reference/cli/index.html).
 
-Deploy the service using the image tag from above `mvn install`:
+#### Creating Secrets
+
+Before deploying, create secrets for configuration values that are referenced in your `service.yaml`:
+
 ```shell
-akka service deploy tax-processing tax-processing:tag-name --push
+# Database configuration secret
+akka secret create generic tax-db-secret \
+  --literal TAX_DB_HOST=<host> \
+  --literal TAX_DB_PASSWORD=<password> \
+  --literal TAX_DB_MONITORING_DELAY=0
+
+# Application configuration secret
+akka secret create generic app-secret \
+  --literal POSITION_NUMBER_PER_WINDOWS=500 \
+  --literal POSITION_MAX_WINDOWS=5 \
+  --literal POSITION_IDEMPOTENCY_CACHE_SIZE=10 \
+  --literal TRANSACTION_BATCH_LIMIT=200 \
+  --literal TRANSACTION_BATCH_PARALLELISM=2
+```
+
+**List existing secrets:**
+```shell
+akka secret list
+```
+
+#### Push Container Image
+
+Push the container image to the registry:
+```shell
+docker push tax-processing:latest
+```
+
+#### Service Deployment
+
+**Important**: Update the image tag in `service.yaml` to match the pushed image before deployment.
+
+Deploy the service using the service descriptor:
+```shell
+akka service deploy apply -f service.yaml
 ```
 
 You can use the [Akka Console](https://console.akka.io) to create a project and see the status of your service.

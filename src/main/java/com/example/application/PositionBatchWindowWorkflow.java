@@ -12,7 +12,6 @@ import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import com.example.domain.PositionBatchWindowState;
 import com.example.domain.ProcessingConfig;
-import com.example.domain.PositionBatchWindowState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,11 +168,11 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
         logger.debug("initStep: {}", commandContext().workflowId());
         var transactionCount = taxDataRepository.countTransactionsForPositionWindow(state.taxYear(), state.positionWindowOffset(), state.positionWindowLimit());
 
-        var transactionBatchCount = (int) Math.ceil((double) transactionCount / processingConfig.transactionMicrobatchLimit());
+        var transactionBatchCount = (int) Math.ceil((double) transactionCount / processingConfig.transactionsBatchLimit());
 
-        logger.info("[{}] Starting: transactionBatchCount={}, transactionCount={}, transactionsPerBatch={}", commandContext().workflowId(),transactionBatchCount, transactionCount, processingConfig.transactionMicrobatchLimit());
+        logger.info("[{}] Starting: transactionBatchCount={}, transactionCount={}, transactionsPerBatch={}", commandContext().workflowId(),transactionBatchCount, transactionCount, processingConfig.transactionsBatchLimit());
         return stepEffects()
-                .updateState(state.start(transactionCount,transactionBatchCount,processingConfig.transactionMicrobatchLimit()))//TODO rename transactionMicrobatchLimit
+                .updateState(state.start(transactionCount,transactionBatchCount,processingConfig.transactionsBatchLimit()))//TODO rename transactionsBatchLimit
                 .thenTransitionTo(PositionBatchWindowWorkflow::startStep);
     }
 

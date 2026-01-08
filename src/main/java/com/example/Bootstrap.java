@@ -5,11 +5,9 @@ import akka.javasdk.ServiceSetup;
 import akka.javasdk.annotations.Setup;
 import com.example.application.TaxDataRepository;
 import com.example.domain.ProcessingConfig;
-import com.example.infrastructure.MockTaxDataRepository;
 import com.example.infrastructure.PostgreSQLTaxDataRepository;
 import com.example.infrastructure.DatabaseConfiguration;
 import com.typesafe.config.Config;
-import io.r2dbc.spi.ConnectionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,16 +54,8 @@ public class Bootstrap implements ServiceSetup {
     }
 
     private TaxDataRepository createTaxDataRepository() {
-        var useDatabase = config.hasPath("tax-processing.database.enable") &&
-                         config.getBoolean("tax-processing.database.enable");
-
-        if (useDatabase) {
-            logger.info("Initializing PostgreSQL database repository");
-            var connectionFactory = DatabaseConfiguration.createConnectionFactory(config);
-            return new PostgreSQLTaxDataRepository(connectionFactory);
-        } else {
-            logger.info("Using mock repository with default test data");
-            return MockTaxDataRepository.withDefaultData();
-        }
+        logger.info("Initializing PostgreSQL database repository");
+        var connectionFactory = DatabaseConfiguration.createConnectionFactory(config);
+        return new PostgreSQLTaxDataRepository(connectionFactory);
     }
 }

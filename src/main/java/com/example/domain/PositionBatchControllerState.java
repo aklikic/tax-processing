@@ -26,6 +26,7 @@ public record PositionBatchControllerState(
     int nextWindowId,
     Map<String, WindowStatus> windowStatuses,
     long completedPositions,
+    int completedWindows,
     String errorMessage
 ) {
 
@@ -84,6 +85,7 @@ public record PositionBatchControllerState(
                 0,
             new ConcurrentHashMap<>(),
             0,
+            0,
             null
         );
     }
@@ -100,39 +102,59 @@ public record PositionBatchControllerState(
             0,
             new ConcurrentHashMap<>(),
             0,
+            0,
             null
         );
     }
 
     public PositionBatchControllerState withTotalPositions(long total) {
-        return new PositionBatchControllerState(batchId, taxYear, status, total, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, errorMessage);
+        return new PositionBatchControllerState(batchId, taxYear, status, total, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, completedWindows, errorMessage);
     }
 
     public PositionBatchControllerState withTotalWindows(int total) {
-        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,total, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, errorMessage);
+        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,total, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, completedWindows, errorMessage);
     }
 
     public PositionBatchControllerState withStatus(ProcessingStatus newStatus) {
-        return new PositionBatchControllerState(batchId, taxYear, newStatus, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, errorMessage);
+        return new PositionBatchControllerState(batchId, taxYear, newStatus, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, completedWindows, errorMessage);
     }
 
 
-    public PositionBatchControllerState onWindowStatusResult(String windowId, long windowCompletedPositions, Optional<String> newErrorMessage) {
+    public PositionBatchControllerState onWindowStatusResult(String windowId, long windowCompletedPositions, Optional<String> newErrorMessage, int maxCompletedWindowsToKeepInState) {
         var updated = new ConcurrentHashMap<>(windowStatuses);
         updated.put(windowId, windowStatuses.get(windowId).onResult(windowCompletedPositions, newErrorMessage));
+
+        // Remove old completed/failed entries, keeping only the newest ones up to the limit
+        var completedOrFailed = updated.values().stream()
+                .filter(ws -> ws.status() == WindowProcessingStatus.COMPLETED || ws.status() == WindowProcessingStatus.FAILED)
+                .sorted((w1, w2) -> Integer.compare(Integer.parseInt(w2.windowId()), Integer.parseInt(w1.windowId()))) // Sort by windowId descending (newest first)
+                .collect(Collectors.toList());
+
+        if (completedOrFailed.size() > maxCompletedWindowsToKeepInState) {
+            var toRemove = completedOrFailed.subList(maxCompletedWindowsToKeepInState, completedOrFailed.size());
+            toRemove.forEach(ws -> updated.remove(ws.windowId()));
+        }
+
         var newCompletedPositions = completedPositions + windowCompletedPositions;
-        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, updated, newCompletedPositions , newErrorMessage.orElse(errorMessage));
+        var newCompletedWindows = completedWindows + 1;
+        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, updated, newCompletedPositions, newCompletedWindows, newErrorMessage.orElse(errorMessage));
     }
 
 
     public PositionBatchControllerState withError(String error) {
-        return new PositionBatchControllerState(batchId, taxYear, ProcessingStatus.FAILED, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, error);
+        return new PositionBatchControllerState(batchId, taxYear, ProcessingStatus.FAILED, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, completedWindows, error);
     }
 
     public PositionBatchControllerState prepareNextWindowBatchToLaunch() {
         var windowIdStartInclusive = nextWindowId;
         var alreadyRunning = getWindowStatusesRunning().size();
         var windowIdEndExclusive = windowIdStartInclusive + maxParallelWindows - alreadyRunning;
+
+        // Ensure we never go backwards - if too many windows are already running, don't launch any new ones
+        if(windowIdEndExclusive < windowIdStartInclusive) {
+            windowIdEndExclusive = windowIdStartInclusive;
+        }
+
         if(windowIdEndExclusive > totalWindows) {
             windowIdEndExclusive = totalWindows;
         }
@@ -151,7 +173,7 @@ public record PositionBatchControllerState(
         var updated = new ConcurrentHashMap<>(windowStatuses);
         updated.putAll(newWindowStatuses);
 
-        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, windowIdEndExclusive ,updated, completedPositions, errorMessage);
+        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, windowIdEndExclusive ,updated, completedPositions, completedWindows, errorMessage);
 
     }
 
@@ -176,6 +198,6 @@ public record PositionBatchControllerState(
                 logger.error("[{}] markWindowStatusesRunning status of {} is {}", batchId, windowStatus.windowId(), updated.get(windowStatus.windowId()).status());
             }
         }
-        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId,updated, completedPositions, errorMessage);
+        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId,updated, completedPositions, completedWindows, errorMessage);
     }
 }

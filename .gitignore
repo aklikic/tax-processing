@@ -33,4 +33,6 @@ akka-context/
 
 app.log
 
+setup.txt
+
 *.pem
