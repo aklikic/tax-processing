@@ -131,31 +131,56 @@ public class PositionBatchControllerStateTest {
     }
 
     @Test
-    public void shouldNotGoBackwardsWhenTooManyWindowsRunning() {
+    public void shouldNotLaunchNewWindowsWhenAtMaxParallelLimit() {
         var windowStatuses = new ConcurrentHashMap<String, PositionBatchControllerState.WindowStatus>();
 
-        // Create scenario where more windows are running than maxParallelWindows allows
-        // This can happen due to config changes or race conditions
+        // Create scenario where we're at the maxParallelWindows limit
         windowStatuses.put("0", new PositionBatchControllerState.WindowStatus("0", 0, 100, "batch-0", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
         windowStatuses.put("1", new PositionBatchControllerState.WindowStatus("1", 100, 100, "batch-1", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
         windowStatuses.put("2", new PositionBatchControllerState.WindowStatus("2", 200, 100, "batch-2", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
-        windowStatuses.put("3", new PositionBatchControllerState.WindowStatus("3", 300, 100, "batch-3", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
-        windowStatuses.put("4", new PositionBatchControllerState.WindowStatus("4", 400, 100, "batch-4", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
-        windowStatuses.put("5", new PositionBatchControllerState.WindowStatus("5", 500, 100, "batch-5", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            2000L, 100, 20, 3, 10, windowStatuses, 600L, 6, null  // maxParallelWindows=3 but 6 windows running
+            2000L, 100, 20, 3, 10, windowStatuses, 300L, 3, null  // maxParallelWindows=3 and exactly 3 windows running
         );
 
-        // Try to prepare next batch - this should NOT go backwards
+        // Try to prepare next batch - should not create any new windows
         var newState = state.prepareNextWindowBatchToLaunch();
 
-        // nextWindowId should NOT go backwards
-        assertThat(newState.nextWindowId()).isEqualTo(10); // Should stay the same, not go backwards
+        // nextWindowId should stay the same since no new windows created
+        assertThat(newState.nextWindowId()).isEqualTo(10);
 
-        // Should not create any new windows since too many are already running
-        assertThat(newState.windowStatuses()).hasSize(6); // Same size as before
-        assertThat(newState.windowStatuses()).containsOnlyKeys("0", "1", "2", "3", "4", "5"); // Same windows
+        // Should not create any new windows since we're at the limit
+        assertThat(newState.windowStatuses()).hasSize(3); // Same size as before
+        assertThat(newState.windowStatuses()).containsOnlyKeys("0", "1", "2"); // Same windows
+    }
+
+    @Test
+    public void shouldLaunchOnlyAvailableSlotsWhenUnderMaxParallelLimit() {
+        var windowStatuses = new ConcurrentHashMap<String, PositionBatchControllerState.WindowStatus>();
+
+        // Create scenario where we have 2 running windows but max is 5
+        windowStatuses.put("0", new PositionBatchControllerState.WindowStatus("0", 0, 100, "batch-0", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+        windowStatuses.put("1", new PositionBatchControllerState.WindowStatus("1", 100, 100, "batch-1", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
+
+        var state = new PositionBatchControllerState(
+            "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
+            2000L, 100, 20, 5, 10, windowStatuses, 200L, 2, null  // maxParallelWindows=5, 2 running, nextWindowId=10
+        );
+
+        // Try to prepare next batch - should create exactly 3 new windows (5 max - 2 running = 3 available)
+        var newState = state.prepareNextWindowBatchToLaunch();
+
+        // nextWindowId should advance by 3
+        assertThat(newState.nextWindowId()).isEqualTo(13);
+
+        // Should create 3 new windows (10, 11, 12)
+        assertThat(newState.windowStatuses()).hasSize(5);
+        assertThat(newState.windowStatuses()).containsKeys("0", "1", "10", "11", "12");
+
+        // New windows should have TO_RUN status
+        assertThat(newState.windowStatuses().get("10").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
+        assertThat(newState.windowStatuses().get("11").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
+        assertThat(newState.windowStatuses().get("12").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
     }
 }

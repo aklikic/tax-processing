@@ -1,5 +1,6 @@
 package com.example.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,12 +149,22 @@ public record PositionBatchControllerState(
     public PositionBatchControllerState prepareNextWindowBatchToLaunch() {
         var windowIdStartInclusive = nextWindowId;
         var alreadyRunning = getWindowStatusesRunning().size();
-        var windowIdEndExclusive = windowIdStartInclusive + maxParallelWindows - alreadyRunning;
 
-        // Ensure we never go backwards - if too many windows are already running, don't launch any new ones
-        if(windowIdEndExclusive < windowIdStartInclusive) {
-            windowIdEndExclusive = windowIdStartInclusive;
+        // Calculate how many new windows we can launch without exceeding maxParallelWindows
+        var availableSlots = maxParallelWindows - alreadyRunning;
+
+        logger.debug("[{}] prepareNextWindowBatchToLaunch: nextWindowId={}, alreadyRunning={}, maxParallelWindows={}, availableSlots={}",
+                batchId, nextWindowId, alreadyRunning, maxParallelWindows, availableSlots);
+
+        // If no slots available, don't create any new windows
+        if (availableSlots <= 0) {
+            logger.debug("[{}] prepareNextWindowBatchToLaunch: No available slots (running={}, max={}). Skipping window creation.",
+                    batchId, alreadyRunning, maxParallelWindows);
+            return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, completedWindows, errorMessage);
         }
+
+        // Only create windows up to the available slots
+        var windowIdEndExclusive = windowIdStartInclusive + availableSlots;
 
         if(windowIdEndExclusive > totalWindows) {
             windowIdEndExclusive = totalWindows;
@@ -177,12 +188,13 @@ public record PositionBatchControllerState(
 
     }
 
+    @JsonIgnore
     public List<WindowStatus> getWindowStatusesToRun() {
         return windowStatuses.values().stream()
                 .filter(ws -> ws.status() == WindowProcessingStatus.TO_RUN)
                 .collect(Collectors.toList());
     }
-
+    @JsonIgnore
     public List<WindowStatus> getWindowStatusesRunning() {
         return windowStatuses.values().stream()
                 .filter(ws -> ws.status() == WindowProcessingStatus.RUNNING)
