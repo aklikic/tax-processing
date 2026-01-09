@@ -58,7 +58,7 @@ public record PositionBatchControllerState(
     ) {
         public static WindowStatus initializing(String batchId, String windowId, int windowOffset, int windowLimit) {
             var windowWorkflowId = new BatchWindowWorkflowId(batchId, windowId);
-            return new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId.serialize(), WindowProcessingStatus.TO_RUN, 0,null);
+            return new WindowStatus(windowId, windowOffset, windowLimit, windowWorkflowId.serialize(), WindowProcessingStatus.RUNNING, 0,null);
         }
 
         public WindowStatus withStatus(WindowProcessingStatus newStatus) {
@@ -146,6 +146,7 @@ public record PositionBatchControllerState(
         return new PositionBatchControllerState(batchId, taxYear, ProcessingStatus.FAILED, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId, windowStatuses, completedPositions, completedWindows, error);
     }
 
+//    public record NextWindowBatchToLaunch(List<WindowStatus> nextWindowBatches, PositionBatchControllerState updatedState){}
     public PositionBatchControllerState prepareNextWindowBatchToLaunch() {
         var windowIdStartInclusive = nextWindowId;
         var alreadyRunning = getWindowStatusesRunning().size();
@@ -169,7 +170,7 @@ public record PositionBatchControllerState(
         if(windowIdEndExclusive > totalWindows) {
             windowIdEndExclusive = totalWindows;
         }
-        var newWindowStatuses =
+        var toRunWindows =
                 IntStream.range(windowIdStartInclusive, windowIdEndExclusive).mapToObj(index -> {
                     var windowId = index + "";
                     var windowOffset = index * positionsPerWindow;
@@ -182,18 +183,18 @@ public record PositionBatchControllerState(
                 }).collect(Collectors.toMap(PositionBatchControllerState.WindowStatus::windowId, Function.identity()));
 
         var updated = new ConcurrentHashMap<>(windowStatuses);
-        updated.putAll(newWindowStatuses);
+        updated.putAll(toRunWindows);
 
         return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, windowIdEndExclusive ,updated, completedPositions, completedWindows, errorMessage);
 
     }
-
-    @JsonIgnore
-    public List<WindowStatus> getWindowStatusesToRun() {
-        return windowStatuses.values().stream()
-                .filter(ws -> ws.status() == WindowProcessingStatus.TO_RUN)
-                .collect(Collectors.toList());
-    }
+//    @JsonIgnore
+//    public List<WindowStatus> getWindowStatusesToRun() {
+//        return windowStatuses.values().stream()
+//                .filter(ws -> ws.status() == WindowProcessingStatus.TO_RUN)
+//                .collect(Collectors.toList());
+//    }
+//
     @JsonIgnore
     public List<WindowStatus> getWindowStatusesRunning() {
         return windowStatuses.values().stream()
@@ -201,15 +202,15 @@ public record PositionBatchControllerState(
                 .collect(Collectors.toList());
     }
 
-    public PositionBatchControllerState markWindowStatusesRunning(List<WindowStatus> windows){
-        var updated = new ConcurrentHashMap<>(windowStatuses);
-        for(WindowStatus windowStatus : windows){
-            if(updated.get(windowStatus.windowId()).status() == WindowProcessingStatus.TO_RUN) {
-                updated.put(windowStatus.windowId(), windowStatus.withStatus(WindowProcessingStatus.RUNNING));
-            } else {
-                logger.error("[{}] markWindowStatusesRunning status of {} is {}", batchId, windowStatus.windowId(), updated.get(windowStatus.windowId()).status());
-            }
-        }
-        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId,updated, completedPositions, completedWindows, errorMessage);
-    }
+//    public PositionBatchControllerState markWindowStatusesRunning(List<WindowStatus> windows){
+//        var updated = new ConcurrentHashMap<>(windowStatuses);
+//        for(WindowStatus windowStatus : windows){
+//            if(updated.get(windowStatus.windowId()).status() == WindowProcessingStatus.TO_RUN) {
+//                updated.put(windowStatus.windowId(), windowStatus.withStatus(WindowProcessingStatus.RUNNING));
+//            } else {
+//                logger.error("[{}] markWindowStatusesRunning status of {} is {}", batchId, windowStatus.windowId(), updated.get(windowStatus.windowId()).status());
+//            }
+//        }
+//        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow, totalWindows, maxParallelWindows, nextWindowId,updated, completedPositions, completedWindows, errorMessage);
+//    }
 }
