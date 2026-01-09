@@ -58,7 +58,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
         PositionBatchControllerState.ProcessingStatus status,
         long totalPositions,
         int totalWindows,
-        int runningWindows,
+        List<String> runningWindowIds,
         int completedWindows,
         long completedPositions,
         String errorMessage
@@ -69,16 +69,6 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
         long windowCompletedPositions,
         String errorMessage
     ) {}
-
-    private record OpeningBalanceTransactionsBatchWorkflowId(String batchId, int window, int positionBatchIndex){
-        public String serialize() {
-            return batchId + "-" + window + "-" + positionBatchIndex;
-        }
-        public static OpeningBalanceTransactionsBatchWorkflowId deserialize(String raw) {
-            var split = raw.split("-");
-            return new OpeningBalanceTransactionsBatchWorkflowId(split[0], Integer.parseInt(split[1]), Integer.parseInt(split[2]));
-        }
-    }
 
     @Override
     public PositionBatchControllerState emptyState() {
@@ -108,7 +98,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
             state.status(),
             state.totalPositions(),
             state.totalWindows(),
-            state.getWindowStatusesRunning().size(),
+            state.getWindowStatusesRunning().stream().map(PositionBatchControllerState.WindowStatus::windowId).collect(Collectors.toList()),
             state.completedWindows(),
             state.completedPositions(),
             state.errorMessage()
@@ -133,11 +123,16 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
         // Add completed sub-workflow to state
         var updatedState = state.onWindowStatusResult(command.windowId(), command.windowCompletedPositions(), Optional.ofNullable(command.errorMessage), processingConfig.positionsMaxCompletedWindowsToKeepInState());
 
-        // prepare next window batch to launch
-        updatedState = updatedState.prepareNextWindowBatchToLaunch();
-
+        var windowStatusesNextToRun = 0;
+        if(state.getWindowStatusesToRun().isEmpty()) {
+            // prepare next window batch to launch
+            updatedState = updatedState.prepareNextWindowBatchToLaunch();
+            windowStatusesNextToRun = updatedState.getWindowStatusesToRun().size();
+        }else{
+            logger.info("[{}] Callback for sub-workflow {} list to RUN not empty ({}). Skipping adding new!", commandContext().workflowId(), command.windowId(), state.getWindowStatusesToRun().size());
+        }
         var windowStatusesRunningCount = updatedState.getWindowStatusesRunning().size();
-        var windowStatusesNextToRun = updatedState.getWindowStatusesToRun().size();
+
 
         if(windowStatusesRunningCount == 0 && windowStatusesNextToRun == 0){
             logger.info("[{}] All sub-workflows completed successfully. Not more windows to run. DONE!",
@@ -150,7 +145,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
             logger.info("[{}] Still running windows {}, run next windows: {}",
                     commandContext().workflowId(), windowStatusesRunningCount,windowStatusesNextToRun);
             return effects()
-                    .updateState(updatedState)
+                    .updateState(updatedState.withStatus(PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS))
                     .transitionTo(PositionBatchControllerWorkflow::launchWindowsStep)
                     .thenReply(Done.getInstance());
         } else {

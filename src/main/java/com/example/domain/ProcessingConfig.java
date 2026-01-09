@@ -2,6 +2,8 @@ package com.example.domain;
 
 import com.typesafe.config.Config;
 
+import java.time.Duration;
+
 public record ProcessingConfig(
     int positionNumberPerWindow,
     int positionMaxParallelWindows,
@@ -10,7 +12,9 @@ public record ProcessingConfig(
     int positionIdempotencyCacheSize,
 
     int transactionsBatchLimit,
-    int transactionsBatchParallelism
+    int transactionsBatchParallelism,
+
+    Duration transactionsBatchProcessingTimeout
 
 ) {
 
@@ -22,7 +26,8 @@ public record ProcessingConfig(
             processingConfig.getInt("position-max-completed-windows-to-keep-in-state"),
             processingConfig.getInt("position-idempotency-cache-size"),
             processingConfig.getInt("transactions-batch-limit"),
-            processingConfig.getInt("transactions-batch-parallelism")
+            processingConfig.getInt("transactions-batch-parallelism"),
+            processingConfig.getDuration("transactions-batch-running-timeout")
         );
     }
 }

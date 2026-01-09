@@ -1,15 +1,19 @@
 package com.example.api;
 
 import akka.Done;
+import akka.http.javadsl.model.HttpResponse;
 import akka.javasdk.annotations.Acl;
 import akka.javasdk.annotations.http.*;
 import akka.javasdk.client.ComponentClient;
 import akka.javasdk.http.AbstractHttpEndpoint;
+import akka.javasdk.http.HttpResponses;
 import com.example.application.PositionBatchControllerWorkflow;
+import com.example.application.PositionBatchWindowWorkflow;
 import com.example.domain.PositionBatchControllerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -74,6 +78,21 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
         return toPositionApiStatus(status);
     }
 
+    @Post("/position-batches/{batchId}/window/{windowId}/running-timeout-trigger")
+    public HttpResponse runningTimeoutTriggerForPositionBatchWindow(String batchId, String windowId) {
+        logger.info("Trigger timeout for position batch window: batchId={}, windowId={}", batchId, windowId);
+
+        var positionBatchWindowWorkflowId = new PositionBatchControllerState.BatchWindowWorkflowId(batchId, windowId);
+
+        componentClient.forWorkflow(positionBatchWindowWorkflowId.serialize())
+                .method(PositionBatchWindowWorkflow::runningTimeout)
+                .invoke();
+
+        logger.info("Successfully triggered position batch window timeout: batchId={}, windowId={}", batchId, windowId);
+
+        return HttpResponses.ok();
+    }
+
 
     /**
      * Convert internal position workflow status to API response format.
@@ -85,7 +104,7 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
             internalStatus.status(),
             internalStatus.totalPositions(),
             internalStatus.totalWindows(),
-            internalStatus.runningWindows(),
+            internalStatus.runningWindowIds(),
             internalStatus.completedWindows(),
             internalStatus.completedPositions(),
             internalStatus.errorMessage()
@@ -120,7 +139,7 @@ public class TaxProcessingEndpoint extends AbstractHttpEndpoint {
         PositionBatchControllerState.ProcessingStatus status,
         long totalPositions,
         int totalWindows,
-        int runningWindows,
+        List<String> runningWindowIds,
         int completedWindows,
         long completedPositions,
         String errorMessage

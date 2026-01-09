@@ -37,7 +37,7 @@ public record PositionBatchControllerState(
         PENDING, INITIALIZING, LAUNCHING_WINDOWS, AWAITING_WINDOW_SUB_WORKFLOWS_CALLBACK, COMPLETED, FAILED
     }
 
-    private record BatchWindowWorkflowId(String batchId, String windowId){
+    public record BatchWindowWorkflowId(String batchId, String windowId){
         public String serialize() {
             return batchId + "-" + windowId;
         }

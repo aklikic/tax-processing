@@ -263,15 +263,12 @@ curl -X GET http://localhost:9000/tax-processing/position-batches/pos-batch-2023
 {
   "batchId": "pos-batch-2023-001",
   "taxYear": "2023",
-  "status": "PROCESSING",
+  "status": "AWAITING_WINDOW_SUB_WORKFLOWS_CALLBACK",
   "totalPositions": 4400000,
-  "completedPositions": 1500000,
   "totalWindows": 880,
-  "windowStatuses": {
-    "window-0": {"status": "COMPLETED", "completedPositions": 5000},
-    "window-1": {"status": "PROCESSING", "completedPositions": 3200},
-    "window-2": {"status": "PENDING", "completedPositions": 0}
-  },
+  "runningWindowIds": ["0", "1", "2"],
+  "completedWindows": 12,
+  "completedPositions": 6000,
   "errorMessage": null
 }
 ```
@@ -307,6 +304,16 @@ Get count of positions with specific transaction count
 ```bash
 curl -X GET http://localhost:9000/api/processing-status/positions/transactions/6/count
 ```
+
+#### Triggering Position Batch Window Timeout
+
+Manually trigger a timeout for a specific position batch window (useful for debugging or forcing completion):
+
+```bash
+curl -X POST http://localhost:9000/tax-processing/position-batches/pos-batch-2023-001/window/5/running-timeout-trigger
+```
+
+This endpoint triggers a timeout for position batch window processing, which can help resolve stuck windows or test timeout handling behavior.
 
 ## Development
 
