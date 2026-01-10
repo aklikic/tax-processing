@@ -138,7 +138,7 @@ public record PositionBatchControllerState(
 
         var newCompletedPositions = completedPositions + windowCompletedPositions;
         var newCompletedWindows = completedWindows + 1;
-        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, updated, newCompletedPositions, newCompletedWindows, newErrorMessage.orElse(errorMessage));
+        return new PositionBatchControllerState(batchId, taxYear, status, totalPositions, positionsPerWindow,totalWindows, maxParallelWindows, nextWindowId, updated, newCompletedPositions, newCompletedWindows, errorMessage);
     }
 
 

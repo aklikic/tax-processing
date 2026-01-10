@@ -38,7 +38,7 @@ public class DatabaseConfiguration {
         var username = dbConfig.getString("username");
         var password = dbConfig.getString("password");
 
-        var monitoringDelay = dbConfig.getInt(" monitoring-delay");
+        var monitoringDelay = dbConfig.getDuration(" monitoring-delay");
         var sslEnabled = dbConfig.getBoolean("ssl-enabled");
 
         var poolConfig = dbConfig.getConfig("pool");
@@ -90,8 +90,8 @@ public class DatabaseConfiguration {
      * @param connectionPool the connection pool to monitor
      * @param maxPoolSize maximum pool size for percentage calculations
      */
-    private static void startPoolMetricsLogging(ConnectionPool connectionPool, int maxPoolSize, int delay) {
-        if(delay < 1)
+    private static void startPoolMetricsLogging(ConnectionPool connectionPool, int maxPoolSize, Duration delay) {
+        if(delay.isZero() || delay.isNegative())
             return;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
             Thread t = new Thread(r, "pool-metrics-logger");
@@ -126,7 +126,7 @@ public class DatabaseConfiguration {
             } catch (Exception e) {
                 logger.warn("Failed to log pool metrics: {}", e.getMessage());
             }
-        }, delay, delay, TimeUnit.SECONDS); // Log every X seconds
+        }, delay.toMillis(), delay.toMillis(), TimeUnit.MILLISECONDS); // Log every X seconds
 
         logger.info("Started R2DBC connection pool metrics logging (every {} seconds)",  delay);
     }

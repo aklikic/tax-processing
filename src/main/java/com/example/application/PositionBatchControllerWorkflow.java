@@ -132,7 +132,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
                 return effects()
                         .updateState(updatedState.withStatus(PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS))
                         .transitionTo(PositionBatchControllerWorkflow::launchWindowsStep)
-                        .withInput(new LaunchWindowsStepInput(updatedState.getWindowStatusesRunning()))
+                        .withInput(LaunchWindowsStepInput.of(updatedState.getWindowStatusesRunning()))
                         .thenReply(Done.getInstance());
             } else {
                 logger.info("[{}] All sub-workflows completed successfully. Not more windows to run. DONE!",
@@ -181,16 +181,21 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
                 .withStatus(PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS)
             )
             .thenTransitionTo(PositionBatchControllerWorkflow::launchWindowsStep)
-                .withInput(new LaunchWindowsStepInput(state.getWindowStatusesRunning()));
+                .withInput(LaunchWindowsStepInput.of(state.getWindowStatusesRunning()));
     }
 
-    record LaunchWindowsStepInput(List<PositionBatchControllerState.WindowStatus> nextWindowBatches){}
+    record LaunchWindowsStepInput(String nextWindowBatches){
+        public static LaunchWindowsStepInput of(List<PositionBatchControllerState.WindowStatus> nextWindowBatches){
+            return new LaunchWindowsStepInput(nextWindowBatches.stream().map(PositionBatchControllerState.WindowStatus::windowId).collect(Collectors.joining(",")));
+        }
+    }
     @StepName("launch-windows")
     private StepEffect launchWindowsStep(LaunchWindowsStepInput input) {
 
         var state = currentState();
         logger.info("[{}] launchWindowsStep", commandContext().workflowId());
-        var nextWindowBatches = input.nextWindowBatches();
+//        var nextWindowBatches = input.nextWindowBatches();
+        var nextWindowBatches = state.getWindowStatusesRunning();
         var processingFutures = nextWindowBatches.stream().map(ws -> {
             logger.info("[{}] Launched sub-workflow {}",commandContext().workflowId(), ws.windowId());
             var startCommand = new PositionBatchWindowWorkflow.StartBatchCommand(

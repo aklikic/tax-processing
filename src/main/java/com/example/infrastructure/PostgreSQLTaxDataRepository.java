@@ -365,9 +365,10 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             var totalAmount = row.get("total_amount", BigDecimal.class);
 
             // Map string to TransactionType enum
-            var transactionType = mapToTransactionType(transactionTypeStr);
+            //var transactionType = mapToTransactionType(transactionTypeStr);
+            var transactionType = TransactionType.BUY;
 
-            // Convert OffsetDateTime to Instant
+                    // Convert OffsetDateTime to Instant
             var instant = transactionDate.toInstant();
 
             // Calculate fees: totalAmount should be (units * price) + fees for BUY

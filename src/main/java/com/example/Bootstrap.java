@@ -3,6 +3,7 @@ package com.example;
 import akka.javasdk.DependencyProvider;
 import akka.javasdk.ServiceSetup;
 import akka.javasdk.annotations.Setup;
+import com.example.application.PositionProcessingStatusView;
 import com.example.application.TaxDataRepository;
 import com.example.domain.ProcessingConfig;
 import com.example.infrastructure.PostgreSQLTaxDataRepository;
@@ -10,6 +11,8 @@ import com.example.infrastructure.DatabaseConfiguration;
 import com.typesafe.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Set;
 
 /**
  * Service bootstrap and dependency injection setup for the tax processing application.
@@ -29,6 +32,11 @@ public class Bootstrap implements ServiceSetup {
     @Override
     public void onStartup() {
         logger.info("Tax Processing Service starting up");
+    }
+
+    @Override
+    public Set<Class<?>> disabledComponents() {
+        return Set.of(PositionProcessingStatusView.class);
     }
 
     @Override
