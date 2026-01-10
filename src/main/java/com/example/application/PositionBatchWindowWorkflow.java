@@ -104,8 +104,10 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
 
         return effects()
                 .updateState(state.withTransactionBatchOffset(command.offset()))
-                .pause()
-                .thenReply(Done.getInstance());
+                .pause(
+                     pauseSetting(processingConfig.transactionsBatchProcessingTimeout())
+                                                  .timeoutHandler(PositionBatchWindowWorkflow::runningTimeout)
+                ).thenReply(Done.getInstance());
     }
 
     public Effect<Done> complete(CompleteCommand command) {
@@ -147,6 +149,20 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
         }
     }
 
+    public Effect<Done> runningTimeout() {
+        final var state = currentState();
+        if (state.status() != PositionBatchWindowState.ProcessingStatus.RUNNING) {
+            logger.error("[{}] Ignoring late acceptanceTimeout notification", commandContext().workflowId());
+            return effects().reply(Done.getInstance());
+        }
+        logger.debug("[{}] Callback for acceptanceTimeout. Retry startStep.", commandContext().workflowId());
+
+        return effects()
+                .updateState(state.withStatus(PositionBatchWindowState.ProcessingStatus.START))
+                .transitionTo(PositionBatchWindowWorkflow::startStep)
+                .thenReply(Done.getInstance());
+    }
+
     /**
      * Start the complete opening balance batch processing.
      */
@@ -184,6 +200,14 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
         logger.debug("[{}] startStep: positionWindowOffset={}, positionWindowLimit={}, transactionBatchCount={}, transactionsPerBatch={}, startTransactionBatchOffset={}",
                 commandContext().workflowId(), state.positionWindowOffset(), state.positionWindowLimit(), state.transactionBatchCount(), state.transactionsPerBatch(), startTransactionBatchOffset);
 
+        if(startTransactionBatchOffset >= state.transactionBatchCount()){
+            logger.info("[{}] startStep all transaction batches are done! transactionBatchCount={}, startTransactionBatchOffset={}",
+                    commandContext().workflowId(), state.transactionBatchCount(), startTransactionBatchOffset);
+            return stepEffects()
+                    .updateState(state.withStatus(PositionBatchWindowState.ProcessingStatus.COMPLETED))
+                    .thenTransitionTo(PositionBatchWindowWorkflow::notifyParentStep);
+        }
+
         final var myWorkflowId = commandContext().workflowId();
 
         Flow<Integer, Done, ?> transactionBatchFlow =
@@ -192,22 +216,24 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
                         var offset = transactionBatchIndex * state.transactionsPerBatch();
                         logger.debug("[{}] transactionBatchFlow: offset={}, transactionsPerBatch={}", myWorkflowId, offset, state.transactionsPerBatch());
                         return Source.fromPublisher(taxDataRepository.loadTransactionsForPositionWindow(state.taxYear(), state.positionWindowOffset(), state.positionWindowLimit(), offset, state.transactionsPerBatch()))
-                                     .mapAsyncPartitioned(processingConfig.transactionsBatchParallelism(), 1, t -> t.positionId().toEntityId(),  (transaction, positionEntityId) -> { //TODO mapAsync parallelism doesn't have to be transPerMicroBatch
-                                         return componentClient.forEventSourcedEntity(positionEntityId)
+                                     .mapAsyncPartitioned(processingConfig.transactionsBatchParallelism(), 1, t -> t.positionId().toEntityId(),  (transaction, positionEntityId) ->
+                                         componentClient.forEventSourcedEntity(state.batchId()+positionEntityId)
                                                  .method(PositionEntity::processTransaction)
                                                  .invokeAsync(transaction)
-                                                 .thenApply(tr -> Done.getInstance());
-                                     }).toMat(Sink.ignore(),Keep.right())
+                                                 .thenApply(tr -> Done.getInstance())
+                                     ).toMat(Sink.ignore(),Keep.right())
                                 .run(materializer)
-                                .thenApply(d -> transactionBatchIndex);
+                                .thenApply(d -> transactionBatchIndex)
+                                .exceptionally(e -> {
+                                    logger.error("[{}] transactionBatchFlow: offset={}, transactionsPerBatch={}: {}", myWorkflowId, offset, state.transactionsPerBatch(), e);
+                                    throw new RuntimeException(e);
+                                });
                     }).mapAsync(1, transactionBatchIndex ->
                         componentClient.forWorkflow(myWorkflowId).method(PositionBatchWindowWorkflow::offsetCommit).invokeAsync(new PositionBatchWindowWorkflow.CommitOffsetCommand(transactionBatchIndex))
                     );
 
         //TODO add hook for stop
 
-
-        var run =
         Source.range(startTransactionBatchOffset, state.transactionBatchCount())
                 .via(transactionBatchFlow)
                 .toMat(Sink.ignore(),Keep.right())
@@ -220,7 +246,10 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
         logger.debug("[{}] startStep streaming running!", commandContext().workflowId());
         return stepEffects()
                 .updateState(state.withStatus(PositionBatchWindowState.ProcessingStatus.RUNNING))
-                .thenPause();
+                .thenPause(
+                     pauseSetting(processingConfig.transactionsBatchProcessingTimeout())
+                                                  .timeoutHandler(PositionBatchWindowWorkflow::runningTimeout)
+                );
     }
 
 

@@ -16,28 +16,6 @@ public record Position(
     BigDecimal centsPerUnit,    // Current cost per unit
     BoundedTransactionIdCache processedTransactionIds  // FIFO cache of processed transaction IDs
 ) {
-
-    public Position {
-        if (accountId == null || accountId.isBlank()) {
-            throw new IllegalArgumentException("Account ID cannot be null or blank");
-        }
-        if (instrumentId == null || instrumentId.isBlank()) {
-            throw new IllegalArgumentException("Instrument ID cannot be null or blank");
-        }
-        if (unitsHeld == null || unitsHeld.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Units held cannot be negative");
-        }
-        if (bookCost == null || bookCost.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Book cost cannot be negative");
-        }
-        if (centsPerUnit == null || centsPerUnit.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Cents per unit cannot be negative");
-        }
-        if (processedTransactionIds == null) {
-            throw new IllegalArgumentException("Processed transaction IDs cannot be null");
-        }
-    }
-
     /**
      * @return Type-safe position identifier
      */
@@ -53,7 +31,7 @@ public record Position(
      */
     public PositionResult processTransaction(Transaction transaction) {
         if (!accountId.equals(transaction.accountId()) || !instrumentId.equals(transaction.instrumentId())) {
-            throw new IllegalArgumentException("Transaction does not match position");
+            return new PositionResult(this, List.of(), null);
         }
 
         // Idempotency check - if transaction already processed, return no-op result
@@ -92,7 +70,7 @@ public record Position(
      */
     public PositionResult processSell(Transaction tx) {
         if (tx.units().compareTo(unitsHeld) > 0) {
-            throw new IllegalStateException("Cannot sell more units than held");
+            return new PositionResult(this, List.of(), null);
         }
 
         var netProceeds = tx.netProceeds();
@@ -135,7 +113,7 @@ public record Position(
      */
     public PositionResult processTransferOut(Transaction tx) {
         if (tx.units().compareTo(unitsHeld) > 0) {
-            throw new IllegalStateException("Cannot transfer out more units than held");
+            return new PositionResult(this, List.of(), null);
         }
 
         var newUnits = unitsHeld.subtract(tx.units());

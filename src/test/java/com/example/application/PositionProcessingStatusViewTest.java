@@ -13,6 +13,7 @@ import org.junit.jupiter.api.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -40,6 +41,7 @@ public class PositionProcessingStatusViewTest {
     private TestKit.Settings testKitSettings() {
         return TestKit.Settings.DEFAULT
             .withEventSourcedEntityIncomingMessages(PositionEntity.class)
+                .withDisabledComponents(Set.of())
                 .withDependencyProvider(mockDependencyProvider);
     }
 

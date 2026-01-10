@@ -179,8 +179,8 @@ public class PositionBatchControllerStateTest {
         assertThat(newState.windowStatuses()).containsKeys("0", "1", "10", "11", "12");
 
         // New windows should have TO_RUN status
-        assertThat(newState.windowStatuses().get("10").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
-        assertThat(newState.windowStatuses().get("11").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
-        assertThat(newState.windowStatuses().get("12").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.TO_RUN);
+        assertThat(newState.windowStatuses().get("10").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.RUNNING);
+        assertThat(newState.windowStatuses().get("11").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.RUNNING);
+        assertThat(newState.windowStatuses().get("12").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.RUNNING);
     }
 }

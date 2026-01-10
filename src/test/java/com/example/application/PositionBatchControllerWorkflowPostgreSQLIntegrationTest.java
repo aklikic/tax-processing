@@ -55,7 +55,7 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
                position-max-completed-windows-to-keep-in-state = 10
                transactions-batch-limit = 1
                transactions-batch-parallelism = 25
-                                
+               transactions-batch-running-timeout = 10 minutes
                 database {
                     enable = true
                     host = "%s"
