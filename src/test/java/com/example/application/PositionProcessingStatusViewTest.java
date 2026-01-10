@@ -13,6 +13,7 @@ import org.junit.jupiter.api.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -65,12 +66,14 @@ public class PositionProcessingStatusViewTest {
 
     @Test
     public void testPositionInitializationTracking() {
-        var positionId = "ACC000001-AAPL";
+        var batchId = "batch";
+        var position =  new PositionId("ACC000001", "AAPL");
+        var positionId = position.toEntityId(batchId);
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
 
         // Publish position initialization event
         var initializedEvent = new PositionEvent.Initialized(
-            new PositionId("ACC000001", "AAPL"),
+                position,
             BigDecimal.valueOf(100.00),
             BigDecimal.valueOf(5000.00),
             BigDecimal.valueOf(50.00)
@@ -88,8 +91,8 @@ public class PositionProcessingStatusViewTest {
 
                 assertThat(result).isNotNull();
                 assertThat(result.positionId()).isEqualTo(positionId);
-                assertThat(result.accountId()).isEqualTo("ACC000001");
-                assertThat(result.instrumentId()).isEqualTo("AAPL");
+                assertThat(result.accountId()).isEqualTo(position.accountId());
+                assertThat(result.instrumentId()).isEqualTo(position.instrumentId());
                 assertThat(result.initialized()).isTrue();
                 assertThat(result.transactionsProcessed()).isEqualTo(0);
                 assertThat(result.currentUnitsHeld()).isEqualByComparingTo(BigDecimal.valueOf(100.00));
@@ -101,12 +104,14 @@ public class PositionProcessingStatusViewTest {
 
     @Test
     public void testTransactionProcessingTracking() {
-        var positionId = "ACC000002-MSFT";
+        var batchId = "batch";
+        var position =  new PositionId("ACC000002", "MSFT");
+        var positionId = position.toEntityId(batchId);
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
 
         // First initialize the position
         var initializedEvent = new PositionEvent.Initialized(
-            new PositionId("ACC000002", "MSFT"),
+                position,
             BigDecimal.valueOf(200.00),
             BigDecimal.valueOf(10000.00),
             BigDecimal.valueOf(50.00)
@@ -116,8 +121,8 @@ public class PositionProcessingStatusViewTest {
         // Process a buy transaction
         var buyTransaction = new Transaction(
             "TXN001",
-            "ACC000002",
-            "MSFT",
+            position.accountId(),
+            position.instrumentId(),
             TransactionType.BUY,
             Instant.now(),
             BigDecimal.valueOf(50.00),
@@ -126,7 +131,7 @@ public class PositionProcessingStatusViewTest {
         );
 
         var bookCostAdjustedEvent = new PositionEvent.BookCostAdjusted(
-            new PositionId("ACC000002", "MSFT"),
+            position,
             buyTransaction,
             BigDecimal.valueOf(250.00),
             BigDecimal.valueOf(12760.00),
@@ -153,12 +158,14 @@ public class PositionProcessingStatusViewTest {
 
     @Test
     public void testGainLossTracking() {
-        var positionId = "ACC000003-GOOGL";
+        var batchId = "batch";
+        var position =  new PositionId("ACC000003", "GOOGL");
+        var positionId = position.toEntityId(batchId);
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
 
         // Initialize position
         var initializedEvent = new PositionEvent.Initialized(
-            new PositionId("ACC000003", "GOOGL"),
+            position,
             BigDecimal.valueOf(100.00),
             BigDecimal.valueOf(15000.00),
             BigDecimal.valueOf(150.00)
@@ -168,8 +175,8 @@ public class PositionProcessingStatusViewTest {
         // Process a sell transaction that generates gain/loss
         var sellTransaction = new Transaction(
             "TXN002",
-            "ACC000003",
-            "GOOGL",
+            position.accountId(),
+            position.instrumentId(),
             TransactionType.SELL,
             Instant.now(),
             BigDecimal.valueOf(50.00),
@@ -178,7 +185,7 @@ public class PositionProcessingStatusViewTest {
         );
 
         var gainLossEvent = new PositionEvent.GainLossIncurred(
-            new PositionId("ACC000003", "GOOGL"),
+            position,
             sellTransaction,
             BigDecimal.valueOf(490.00)  // $500 gain minus $10 fees
         );
@@ -200,14 +207,14 @@ public class PositionProcessingStatusViewTest {
 
     @Test
     public void testTotalsQuery() {
+        var batchId = "batch";
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
 
         // Create positions for different accounts
-        var accountPositions = new String[]{"ACC999-AAPL", "ACC999-MSFT", "ACC888-GOOGL"};
+        var accountPositionIds = List.of(new PositionId("ACC999","AAPL"), new PositionId("ACC999","MSFT"), new PositionId("ACC888","GOOGL"));
 
-        for (var positionIdStr : accountPositions) {
-            var parts = positionIdStr.split("-");
-            var positionId = new PositionId(parts[0], parts[1]);
+        for (var positionId : accountPositionIds) {
+            var positionIdStr = positionId.toEntityId(batchId);
             var initializedEvent = new PositionEvent.Initialized(
                     positionId,
                 BigDecimal.valueOf(100.00),

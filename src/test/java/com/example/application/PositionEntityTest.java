@@ -16,16 +16,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class PositionEntityTest {
 
-    private static EventSourcedTestKit<Position, PositionEvent, PositionEntity> createTestKit(String entityId) {
+    private static EventSourcedTestKit<Position, PositionEvent, PositionEntity> createTestKit(String batchId, String accountId, String instrument) {
         var testConfig = ConfigFactory.load();
         ProcessingConfig config = ProcessingConfig.fromConfig(testConfig);
+        var positionId = new PositionId(accountId, instrument);
+        var entityId = positionId.toEntityId(batchId);
         return EventSourcedTestKit.of(entityId, context -> new PositionEntity(context, config));
     }
 
 
     @Test
     public void shouldProcessBuyTransaction() {
-        var testKit = createTestKit("ACC002-MSFT");
+        var testKit = createTestKit("batch","ACC002","MSFT");
 
         // Initialize position first with opening balance of 50 units @ $200/unit = $10,000
         var openingBalanceTransaction = new Transaction(
@@ -74,7 +76,7 @@ public class PositionEntityTest {
 
     @Test
     public void shouldProcessSellTransactionWithGainLoss() {
-        var testKit = createTestKit("ACC003-GOOGL");
+        var testKit = createTestKit("batch","ACC003","GOOGL");
 
         // Initialize position first with 10 units @ $250/unit = $2,500
         var openingBalanceTransaction = new Transaction(
@@ -126,7 +128,7 @@ public class PositionEntityTest {
 
     @Test
     public void shouldProcessTransferInTransaction() {
-        var testKit = createTestKit("ACC004-TSLA");
+        var testKit = createTestKit("batch","ACC004","TSLA");
 
         // Initialize position first with 20 units @ $200/unit = $4,000
         var openingBalanceTransaction = new Transaction(
@@ -167,7 +169,7 @@ public class PositionEntityTest {
 
     @Test
     public void shouldProcessCorporateActionTransaction() {
-        var testKit = createTestKit("ACC005-META");
+        var testKit = createTestKit("batch","ACC005","META");
 
         // Initialize position first with 100 units @ $200/unit = $20,000
         var openingBalanceTransaction = new Transaction(

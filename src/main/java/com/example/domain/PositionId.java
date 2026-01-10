@@ -22,8 +22,8 @@ public record PositionId(
      * @return Position identifier in the format "{accountId}-{instrumentId}"
      * Used for entity IDs and logging.
      */
-    public String toEntityId() {
-        return accountId + "-" + instrumentId;
+    public String toEntityId(String batchId) {
+        return batchId + "#" + accountId + "#" + instrumentId;
     }
 
     /**
@@ -37,11 +37,11 @@ public record PositionId(
             throw new IllegalArgumentException("Entity ID cannot be null or blank");
         }
 
-        var parts = entityId.split("-", 2);
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+        var parts = entityId.split("#", 3);
+        if (parts.length != 3 || parts[1].isBlank() || parts[2].isBlank()) {
             throw new IllegalArgumentException("Invalid entity ID format. Expected: accountId-instrumentId");
         }
 
-        return new PositionId(parts[0], parts[1]);
+        return new PositionId(parts[1], parts[2]);
     }
 }

@@ -5,6 +5,8 @@ import akka.javasdk.annotations.Component;
 import akka.javasdk.eventsourcedentity.EventSourcedEntity;
 import akka.javasdk.eventsourcedentity.EventSourcedEntityContext;
 import com.example.domain.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Event Sourced Entity managing position state for a specific account-instrument combination.
@@ -19,6 +21,7 @@ import com.example.domain.*;
 @Component(id = "position")
 public class PositionEntity extends EventSourcedEntity<Position, PositionEvent> {
 
+    private final Logger logger = LoggerFactory.getLogger(PositionEntity.class);
     private final EventSourcedEntityContext context;
     private final ProcessingConfig processingConfig;
 
@@ -48,7 +51,7 @@ public class PositionEntity extends EventSourcedEntity<Position, PositionEvent> 
     public Effect<Done> processTransaction(Transaction transaction) {
         try {
             var positionResult = currentState().processTransaction(transaction);
-
+            logger.debug("[{}] events to persists: {}", currentState().positionId(), positionResult.events().size());
             return effects()
                 .persistAll(positionResult.events())
                 .thenReply(state ->  Done.getInstance());

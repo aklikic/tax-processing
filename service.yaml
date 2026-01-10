@@ -52,10 +52,10 @@ service:
           name: tax-db-secret
           key: TAX_DB_MONITORING_DELAY
 
-  image:  aklikic/tax-processing:1.0-SNAPSHOT-20260109224133
+  image:  aklikic/tax-processing:1.0-SNAPSHOT-20260110115458
   resources:
     autoscaling:
-      minInstances: 4
-      maxInstances: 6
+      minInstances: 10
+      maxInstances: 10
     runtime:
       mode: embedded

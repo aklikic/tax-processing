@@ -216,8 +216,8 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
                         var offset = transactionBatchIndex * state.transactionsPerBatch();
                         logger.debug("[{}] transactionBatchFlow: offset={}, transactionsPerBatch={}", myWorkflowId, offset, state.transactionsPerBatch());
                         return Source.fromPublisher(taxDataRepository.loadTransactionsForPositionWindow(state.taxYear(), state.positionWindowOffset(), state.positionWindowLimit(), offset, state.transactionsPerBatch()))
-                                     .mapAsyncPartitioned(processingConfig.transactionsBatchParallelism(), 1, t -> t.positionId().toEntityId(),  (transaction, positionEntityId) ->
-                                         componentClient.forEventSourcedEntity(state.batchId()+positionEntityId)
+                                     .mapAsyncPartitioned(processingConfig.transactionsBatchParallelism(), 1, t -> t.positionId().toEntityId(state.batchId()),  (transaction, positionEntityId) ->
+                                         componentClient.forEventSourcedEntity(positionEntityId)
                                                  .method(PositionEntity::processTransaction)
                                                  .invokeAsync(transaction)
                                                  .thenApply(tr -> Done.getInstance())

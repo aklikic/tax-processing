@@ -154,9 +154,9 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
             });
 
         // Verify all positions were processed by checking entities
-        verifyPositionExists(new PositionId("ACC" + testId + "01", "AAPL"));
-        verifyPositionExists(new PositionId("ACC" + testId + "02", "MSFT"));
-        verifyPositionExists(new PositionId("ACC" + testId + "03", "GOOGL"));
+        verifyPositionExists(new PositionId("ACC" + testId + "01", "AAPL"), batchId);
+        verifyPositionExists(new PositionId("ACC" + testId + "02", "MSFT"), batchId);
+        verifyPositionExists(new PositionId("ACC" + testId + "03", "GOOGL"), batchId);
     }
 
     @Test
@@ -228,12 +228,12 @@ public class PositionBatchControllerWorkflowPostgreSQLIntegrationTest extends Te
             });
 
         // Verify all positions from both windows were processed
-        verifyPositionExists(new PositionId("ACC" + testId + "01", "AAPL"));
-        verifyPositionExists(new PositionId("ACC" + testId + "05", "NVDA"));
+        verifyPositionExists(new PositionId("ACC" + testId + "01", "AAPL"), batchId);
+        verifyPositionExists(new PositionId("ACC" + testId + "05", "NVDA"), batchId);
     }
 
-    private void verifyPositionExists(PositionId positionId) {
-        var position = componentClient.forEventSourcedEntity(positionId.toEntityId())
+    private void verifyPositionExists(PositionId positionId, String batchId) {
+        var position = componentClient.forEventSourcedEntity(positionId.toEntityId(batchId))
             .method(PositionEntity::getCurrentState)
             .invoke();
 
