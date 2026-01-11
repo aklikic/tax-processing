@@ -48,9 +48,11 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
     @Override
     public WorkflowSettings settings() {
         return WorkflowSettings.builder()
-
+//            .stepRecovery(PositionBatchWindowWorkflow::initStep, maxRetries(1).failoverTo(PositionBatchWindowWorkflow::initStepFailover))
+            .stepRecovery(PositionBatchWindowWorkflow::initStep, maxRetries(4).failoverTo(PositionBatchWindowWorkflow::errorHandlingStep))
+            .stepTimeout(PositionBatchWindowWorkflow::initStep, Duration.ofMinutes(1))
+            .stepRecovery(PositionBatchWindowWorkflow::startStep, maxRetries(0).failoverTo(PositionBatchWindowWorkflow::errorHandlingStep))
             .stepTimeout(PositionBatchWindowWorkflow::notifyParentStep, Duration.ofMinutes(1))
-            .defaultStepRecovery(maxRetries(0).failoverTo(PositionBatchWindowWorkflow::errorHandlingStep))
             .build();
     }
 
@@ -125,16 +127,16 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
 
 
         if(command.errorMessage().isPresent()){
-            var updatedState = state.withError(command.errorMessage().get()).withRetriesIncrease();
+            var updatedState = state.withError(command.errorMessage().get()).withStartRetriesIncrease();
             var maxRetries = 2; //TODO add to config
-            if(updatedState.retries() >= maxRetries){
+            if(updatedState.startRetries() >= maxRetries){
                 return effects()
                         .updateState(updatedState)
                         .transitionTo(PositionBatchWindowWorkflow::notifyParentStep)
                         .thenReply(Done.getInstance());
             }else{
                 updatedState = updatedState.withStatus(PositionBatchWindowState.ProcessingStatus.START);
-                logger.info("[{}] Retry startStep: [{}]", commandContext().workflowId(), updatedState.retries());
+                logger.info("[{}] Retry startStep: [{}]", commandContext().workflowId(), updatedState.startRetries());
                 return effects()
                         .updateState(updatedState)
                         .transitionTo(PositionBatchWindowWorkflow::startStep)
@@ -188,7 +190,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
 
         logger.info("[{}] Starting: transactionBatchCount={}, transactionCount={}, transactionsPerBatch={}", commandContext().workflowId(),transactionBatchCount, transactionCount, processingConfig.transactionsBatchLimit());
         return stepEffects()
-                .updateState(state.start(transactionCount,transactionBatchCount,processingConfig.transactionsBatchLimit()))//TODO rename transactionsBatchLimit
+                .updateState(state.start(transactionCount,transactionBatchCount,processingConfig.transactionsBatchLimit()))
                 .thenTransitionTo(PositionBatchWindowWorkflow::startStep);
     }
 
@@ -283,7 +285,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
     }
     @StepName("error-handling")
     private StepEffect errorHandlingStep() {
-        logger.error("errorHandlingStep for {} window!", commandContext().workflowId());
+        logger.error("errorHandlingStep for window {}!", commandContext().workflowId());
         // Error occurred during processing
         return stepEffects()
             .updateState(currentState().withError("Batch processing failed due to system error"))

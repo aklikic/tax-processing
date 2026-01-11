@@ -43,7 +43,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
     @Override
     public WorkflowSettings settings() {
         return WorkflowSettings.builder()
-            .stepTimeout(PositionBatchControllerWorkflow::initializationStep, Duration.ofSeconds(30))
+            .stepTimeout(PositionBatchControllerWorkflow::initializationStep, Duration.ofSeconds(60))
             .stepTimeout(PositionBatchControllerWorkflow::launchWindowsStep, Duration.ofSeconds(60))
             .defaultStepRecovery(maxRetries(2).failoverTo(PositionBatchControllerWorkflow::errorHandlingStep))
             .build();
@@ -193,8 +193,6 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
     private StepEffect launchWindowsStep(LaunchWindowsStepInput input) {
 
         var state = currentState();
-        logger.info("[{}] launchWindowsStep", commandContext().workflowId());
-//        var nextWindowBatches = input.nextWindowBatches();
         var nextWindowBatches = state.getWindowStatusesRunning();
         var processingFutures = nextWindowBatches.stream().map(ws -> {
             logger.info("[{}] Launched sub-workflow {}",commandContext().workflowId(), ws.windowId());
@@ -230,7 +228,7 @@ public class PositionBatchControllerWorkflow extends Workflow<PositionBatchContr
 
     @StepName("error-handling")
     private StepEffect errorHandlingStep() {
-        logger.info("errorHandlingStep for {} window!", commandContext().workflowId());
+        logger.info("errorHandlingStep for controller {}!", commandContext().workflowId());
         // Error occurred during processing
         return stepEffects()
             .updateState(currentState().withError("Batch processing failed due to system error"))

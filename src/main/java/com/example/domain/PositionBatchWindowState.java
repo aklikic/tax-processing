@@ -1,5 +1,7 @@
 package com.example.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.util.Optional;
 
 /**
@@ -18,7 +20,8 @@ public record PositionBatchWindowState(
         String parentWorkflowId,
         ProcessingStatus status,
         int transactionBatchOffset,
-        int retries,
+        int initRetries,
+        int startRetries,
         Optional<String> errorMessage
 ) {
 
@@ -41,10 +44,12 @@ public record PositionBatchWindowState(
             ProcessingStatus.PENDING,
             -1,
             0,
+            0,
             Optional.empty()
         );
     }
 
+    @JsonIgnore
     public boolean isEmpty() {
         return positionWindowId.isBlank();
     }
@@ -63,27 +68,30 @@ public record PositionBatchWindowState(
                 ProcessingStatus.INIT,
                 -1,
                 0,
+                0,
                 Optional.empty()
         );
     }
 
     public PositionBatchWindowState start( long transactionCount, int transactionBatchCount, int transactionsPerBatch) {
-        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, ProcessingStatus.START, transactionBatchOffset, retries, errorMessage);
+        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, ProcessingStatus.START, transactionBatchOffset, initRetries, startRetries, errorMessage);
     }
     public PositionBatchWindowState withTransactionBatchOffset(int offset) {
-        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, status, offset, retries, errorMessage);
+        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, status, offset, initRetries, startRetries, errorMessage);
     }
 
     public PositionBatchWindowState withStatus(ProcessingStatus processingStatus) {
-        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit,transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, processingStatus, transactionBatchOffset, retries, Optional.empty());
+        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit,transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, processingStatus, transactionBatchOffset, initRetries, startRetries, Optional.empty());
     }
 
     public PositionBatchWindowState withError(String newErrorMessage) {
-        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, ProcessingStatus.FAILED, transactionBatchOffset, retries, Optional.of(newErrorMessage));
+        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, ProcessingStatus.FAILED, transactionBatchOffset, initRetries, startRetries, Optional.of(newErrorMessage));
     }
-
-    public PositionBatchWindowState withRetriesIncrease() {
-        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, status, transactionBatchOffset, retries+1, errorMessage);
+    public PositionBatchWindowState withInitRetriesIncrease() {
+        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, status, transactionBatchOffset, initRetries + 1, startRetries , errorMessage);
+    }
+    public PositionBatchWindowState withStartRetriesIncrease() {
+        return new PositionBatchWindowState(positionWindowId, positionWindowOffset, positionWindowLimit, transactionCount, transactionBatchCount, transactionsPerBatch, batchId, taxYear, parentWorkflowId, status, transactionBatchOffset, initRetries, startRetries +1 , errorMessage);
     }
 
 }

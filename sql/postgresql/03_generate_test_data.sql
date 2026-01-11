@@ -14,7 +14,7 @@ SET search_path TO tax, public;
 --\set target_avg_transactions_per_position 2.8
 
 ---- Performance Target Configuration
- \set target_opening_balances 8800000
+ \set target_opening_balances 4400000
  \set target_avg_transactions_per_position 2.8
 
 -- Calculate derived values

@@ -2,7 +2,7 @@
 
 A high-performance tax year batch processing system built with Akka SDK for calculating book costs and gain/loss values on client positions.
 
-## System Architecture
+## Processing Flow
 
 ```mermaid
 graph TD

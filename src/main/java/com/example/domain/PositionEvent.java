@@ -8,33 +8,33 @@ import java.math.BigDecimal;
  * These events are persisted and consumed by views and consumers.
  */
 public sealed interface PositionEvent permits
-    PositionEvent.Initialized,
+//    PositionEvent.Initialized,
     PositionEvent.BookCostAdjusted,
     PositionEvent.GainLossIncurred {
 
-    @TypeName("position-initialized")
-    record Initialized(
-        PositionId positionId,
-        BigDecimal initialUnits,
-        BigDecimal initialBookCost,
-        BigDecimal initialCentsPerUnit
-    ) implements PositionEvent {
-
-        public Initialized {
-            if (positionId == null) {
-                throw new IllegalArgumentException("Position ID cannot be null");
-            }
-            if (initialUnits == null || initialUnits.compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("Initial units cannot be negative");
-            }
-            if (initialBookCost == null || initialBookCost.compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("Initial book cost cannot be negative");
-            }
-            if (initialCentsPerUnit == null || initialCentsPerUnit.compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("Initial cents per unit cannot be negative");
-            }
-        }
-    }
+//    @TypeName("position-initialized")
+//    record Initialized(
+//        PositionId positionId,
+//        BigDecimal initialUnits,
+//        BigDecimal initialBookCost,
+//        BigDecimal initialCentsPerUnit
+//    ) implements PositionEvent {
+//
+//        public Initialized {
+//            if (positionId == null) {
+//                throw new IllegalArgumentException("Position ID cannot be null");
+//            }
+//            if (initialUnits == null || initialUnits.compareTo(BigDecimal.ZERO) < 0) {
+//                throw new IllegalArgumentException("Initial units cannot be negative");
+//            }
+//            if (initialBookCost == null || initialBookCost.compareTo(BigDecimal.ZERO) < 0) {
+//                throw new IllegalArgumentException("Initial book cost cannot be negative");
+//            }
+//            if (initialCentsPerUnit == null || initialCentsPerUnit.compareTo(BigDecimal.ZERO) < 0) {
+//                throw new IllegalArgumentException("Initial cents per unit cannot be negative");
+//            }
+//        }
+//    }
 
     @TypeName("book-cost-adjusted")
     record BookCostAdjusted(

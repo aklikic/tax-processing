@@ -91,22 +91,22 @@ public class PositionProcessingStatusView extends View {
             var positionId = PositionId.fromEntityId(entityId);
 
             return switch (event) {
-                case PositionEvent.Initialized initialized -> {
-                    logger.debug("Position initialized: {}", entityId);
-                    var entry = new PositionStatusEntry(
-                        entityId,
-                        positionId.accountId(),
-                        positionId.instrumentId(),
-                        true,
-                        0,
-                        initialized.initialUnits(),
-                        initialized.initialBookCost(),
-                        BigDecimal.ZERO,
-                        Optional.empty(),
-                        Instant.now()
-                    );
-                    yield effects().updateRow(entry);
-                }
+//                case PositionEvent.Initialized initialized -> {
+//                    logger.debug("Position initialized: {}", entityId);
+//                    var entry = new PositionStatusEntry(
+//                        entityId,
+//                        positionId.accountId(),
+//                        positionId.instrumentId(),
+//                        true,
+//                        0,
+//                        initialized.initialUnits(),
+//                        initialized.initialBookCost(),
+//                        BigDecimal.ZERO,
+//                        Optional.empty(),
+//                        Instant.now()
+//                    );
+//                    yield effects().updateRow(entry);
+//                }
 
                 case PositionEvent.BookCostAdjusted adjusted -> {
                     logger.debug("Book cost adjusted for position: {}", entityId);

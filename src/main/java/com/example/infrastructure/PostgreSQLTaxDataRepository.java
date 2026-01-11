@@ -16,6 +16,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * PostgreSQL implementation of TaxDataRepository using R2DBC for reactive database access.
@@ -25,6 +28,7 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
 
     private static final Logger logger = LoggerFactory.getLogger(PostgreSQLTaxDataRepository.class);
 
+    private static final int futureTimeoutSeconds = 60;
     private final ConnectionFactory connectionFactory;
 
     public PostgreSQLTaxDataRepository(ConnectionFactory connectionFactory) {
@@ -32,109 +36,21 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
     }
 
     @Override
-    public List<OpeningBalance> loadOpeningBalancesBatch(String taxYear, int offset, int limit) {
-        logger.debug("Loading opening balances batch: taxYear={}, offset={}, limit={}", taxYear, offset, limit);
-        return loadOpeningBalancesBatchFlux(taxYear, offset, limit).collectList().toFuture().join();
-    }
-
-    @Override
-    public List<Transaction> loadTransactionsForPositions(List<PositionId> positionIds, String taxYear, int offset, int limit) {
-        if (positionIds.isEmpty()) {
-            return List.of();
-        }
-
-        logger.debug("Loading transactions for positions: count={}, taxYear={}, offset={}, limit={}",
-                    positionIds.size(), taxYear, offset, limit);
-
-        return loadTransactionsForPositionsFlux(positionIds, taxYear, offset, limit).collectList().toFuture().join();
-    }
-
-    @Override
-    public long countOpeningBalances(String taxYear) {
-        logger.debug("Counting opening balances for taxYear={}", taxYear);
+    public long countOpeningBalances(String taxYear) throws RuntimeException{
+//        logger.debug("Counting opening balances for taxYear={}", taxYear);
+//        try {
+//            return countOpeningBalancesMono(taxYear).toFuture().get(futureTimeoutSeconds, TimeUnit.SECONDS);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        } catch (ExecutionException e) {
+//            throw new RuntimeException(e);
+//        } catch (TimeoutException e) {
+//            throw new RuntimeException(e);
+//        }
         return countOpeningBalancesMono(taxYear).toFuture().join();
     }
 
-    @Override
-    public long countTransactionsForPositions(List<PositionId> positionIds, String taxYear) {
-        if (positionIds.isEmpty()) {
-            return 0L;
-        }
 
-        logger.debug("Counting transactions for positions: count={}, taxYear={}", positionIds.size(), taxYear);
-        return countTransactionsForPositionsMono(positionIds, taxYear).toFuture().join();
-    }
-
-    @Override
-    public Flux<OpeningBalance> loadOpeningBalancesBatchFlux(String taxYear, int offset, int limit) {
-        logger.debug("Loading opening balances batch (Flux): taxYear={}, offset={}, limit={}", taxYear, offset, limit);
-
-        var sql = """
-            SELECT account_id, instrument, units_held, book_cost
-            FROM tax.opening_balances
-            WHERE tax_year = $1
-            ORDER BY id
-            LIMIT $2 OFFSET $3
-            """;
-
-        return Flux.usingWhen(
-                connectionFactory.create(),
-                connection -> {
-                    var statement = connection.createStatement(sql);
-                    statement.bind(0, taxYear);
-                    statement.bind(1, limit);
-                    statement.bind(2, offset);
-
-                    return Flux.from(statement.execute())
-                        .flatMap(result -> result.map(this::mapToOpeningBalance));
-                },
-                connection -> connection.close()
-            )
-            .doOnError(e -> logger.error("Failed to load opening balances batch (Flux)", e))
-            .onErrorMap(e -> new RuntimeException("Database error loading opening balances: " + e.getMessage(), e));
-    }
-
-    @Override
-    public Flux<Transaction> loadTransactionsForPositionsFlux(List<PositionId> positionIds, String taxYear, int offset, int limit) {
-        if (positionIds.isEmpty()) {
-            return Flux.empty();
-        }
-
-        logger.debug("Loading transactions for positions (Flux): count={}, taxYear={}, offset={}, limit={}",
-                    positionIds.size(), taxYear, offset, limit);
-
-        // Create position filter strings
-        var positionFilters = positionIds.stream()
-            .map(pos -> pos.accountId() + "|" + pos.instrumentId())
-            .toArray(String[]::new);
-
-        var sql = """
-            SELECT transaction_id, account_id, instrument, transaction_date,
-                   transaction_type, units, price_per_unit, total_amount
-            FROM tax.transactions
-            WHERE tax_year = $1
-            AND (account_id || '|' || instrument) = ANY($2::text[])
-            ORDER BY account_id, instrument, transaction_date, id
-            LIMIT $3 OFFSET $4
-            """;
-
-        return Flux.usingWhen(
-                connectionFactory.create(),
-                connection -> {
-                    var statement = connection.createStatement(sql);
-                    statement.bind(0, taxYear);
-                    statement.bind(1, positionFilters);
-                    statement.bind(2, limit);
-                    statement.bind(3, offset);
-
-                    return Flux.from(statement.execute())
-                        .flatMap(result -> result.map(this::mapToTransaction));
-                },
-                connection -> connection.close()
-            )
-            .doOnError(e -> logger.error("Failed to load transactions for positions (Flux)", e))
-            .onErrorMap(e -> new RuntimeException("Database error loading transactions: " + e.getMessage(), e));
-    }
 
     @Override
     public Mono<Long> countOpeningBalancesMono(String taxYear) {
@@ -159,96 +75,6 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             .onErrorReturn(0L);
     }
 
-    @Override
-    public Mono<Long> countTransactionsForPositionsMono(List<PositionId> positionIds, String taxYear) {
-        if (positionIds.isEmpty()) {
-            return Mono.just(0L);
-        }
-
-        logger.debug("Counting transactions for positions (Mono): count={}, taxYear={}", positionIds.size(), taxYear);
-
-        // Create position filter strings
-        var positionFilters = positionIds.stream()
-            .map(pos -> pos.accountId() + "|" + pos.instrumentId())
-            .toArray(String[]::new);
-
-        var sql = """
-            SELECT COUNT(*)
-            FROM tax.transactions
-            WHERE tax_year = $1
-            AND (account_id || '|' || instrument) = ANY($2::text[])
-            """;
-
-        return Mono.usingWhen(
-                connectionFactory.create(),
-                connection -> {
-                    var statement = connection.createStatement(sql);
-                    statement.bind(0, taxYear);
-                    statement.bind(1, positionFilters);
-
-                    return Flux.from(statement.execute())
-                        .flatMap(result -> result.map((row, metadata) -> row.get(0, Long.class)))
-                        .next()
-                        .defaultIfEmpty(0L);
-                },
-                connection -> connection.close()
-            )
-            .doOnError(e -> logger.error("Failed to count transactions for positions (Mono)", e))
-            .onErrorReturn(0L);
-    }
-
-    @Override
-    public Flux<Transaction> loadTransactionsFlux(String taxYear, int offset, int limit) {
-        logger.debug("Loading transactions (Flux): taxYear={}, offset={}, limit={}", taxYear, offset, limit);
-
-        var sql = """
-            SELECT transaction_id, account_id, instrument, transaction_date,
-                   transaction_type, units, price_per_unit, total_amount
-            FROM tax.transactions
-            WHERE tax_year = $1
-            ORDER BY account_id, instrument, transaction_date, id
-            LIMIT $2 OFFSET $3
-            """;
-
-        return Flux.usingWhen(
-                connectionFactory.create(),
-                connection -> {
-                    var statement = connection.createStatement(sql);
-                    statement.bind(0, taxYear);
-                    statement.bind(1, limit);
-                    statement.bind(2, offset);
-
-                    return Flux.from(statement.execute())
-                        .flatMap(result -> result.map(this::mapToTransaction));
-                },
-                connection -> connection.close()
-            )
-            .doOnError(e -> logger.error("Failed to load transactions (Flux)", e))
-            .onErrorMap(e -> new RuntimeException("Database error loading transactions: " + e.getMessage(), e));
-    }
-
-    @Override
-    public Mono<Long> countTransactionsMono(String taxYear) {
-        logger.debug("Counting all transactions (Mono) for taxYear={}", taxYear);
-
-        var sql = "SELECT COUNT(*) FROM tax.transactions WHERE tax_year = $1";
-
-        return Mono.usingWhen(
-                connectionFactory.create(),
-                connection -> {
-                    var statement = connection.createStatement(sql);
-                    statement.bind(0, taxYear);
-
-                    return Flux.from(statement.execute())
-                        .flatMap(result -> result.map((row, metadata) -> row.get(0, Long.class)))
-                        .next()
-                        .defaultIfEmpty(0L);
-                },
-                connection -> connection.close()
-            )
-            .doOnError(e -> logger.error("Failed to count all transactions (Mono)", e))
-            .onErrorReturn(0L);
-    }
 
     @Override
     public Flux<Transaction> loadTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit,
@@ -294,9 +120,26 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
     }
 
     @Override
-    public long countTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit) {
+    public long countTransactionsForPositionWindow(String taxYear, int positionOffset, int positionLimit) throws RuntimeException{
+//        try{
+//            return countTransactionsForPositionWindowMono(taxYear, positionOffset, positionLimit)
+//                .toFuture()
+//                .get(futureTimeoutSeconds, TimeUnit.SECONDS);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        } catch (ExecutionException e) {
+//            throw new RuntimeException(e);
+//        } catch (TimeoutException e) {
+//            throw new RuntimeException(e);
+//        }
+        return countTransactionsForPositionWindowMono(taxYear, positionOffset, positionLimit)
+                .toFuture().join();
+    }
+
+    @Override
+    public Mono<Long> countTransactionsForPositionWindowMono(String taxYear, int positionOffset, int positionLimit) {
         logger.debug("Counting transactions for position window: taxYear={}, positionOffset={}, positionLimit={}",
-                    taxYear, positionOffset, positionLimit);
+                taxYear, positionOffset, positionLimit);
 
         var sql = """
             WITH position_window AS (
@@ -313,24 +156,22 @@ public class PostgreSQLTaxDataRepository implements TaxDataRepository {
             """;
 
         return Mono.usingWhen(
-                connectionFactory.create(),
-                connection -> {
-                    var statement = connection.createStatement(sql);
-                    statement.bind(0, taxYear);
-                    statement.bind(1, positionLimit);
-                    statement.bind(2, positionOffset);
+                        connectionFactory.create(),
+                        connection -> {
+                            var statement = connection.createStatement(sql);
+                            statement.bind(0, taxYear);
+                            statement.bind(1, positionLimit);
+                            statement.bind(2, positionOffset);
 
-                    return Flux.from(statement.execute())
-                        .flatMap(result -> result.map((row, metadata) -> row.get(0, Long.class)))
-                        .next()
-                        .defaultIfEmpty(0L);
-                },
-                connection -> connection.close()
-            )
-            .doOnError(e -> logger.error("Failed to count transactions for position window", e))
-            .onErrorReturn(0L)
-            .toFuture()
-            .join();
+                            return Flux.from(statement.execute())
+                                    .flatMap(result -> result.map((row, metadata) -> row.get(0, Long.class)))
+                                    .next()
+                                    .defaultIfEmpty(0L);
+                        },
+                        connection -> connection.close()
+                )
+                .doOnError(e -> logger.error("Failed to count transactions for position window", e))
+                .onErrorReturn(0L);
     }
 
     /**

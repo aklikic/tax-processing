@@ -42,7 +42,6 @@ public class PositionProcessingStatusViewTest {
     private TestKit.Settings testKitSettings() {
         return TestKit.Settings.DEFAULT
             .withEventSourcedEntityIncomingMessages(PositionEntity.class)
-                .withDisabledComponents(Set.of())
                 .withDependencyProvider(mockDependencyProvider);
     }
 
@@ -64,43 +63,7 @@ public class PositionProcessingStatusViewTest {
 
     }
 
-    @Test
-    public void testPositionInitializationTracking() {
-        var batchId = "batch";
-        var position =  new PositionId("ACC000001", "AAPL");
-        var positionId = position.toEntityId(batchId);
-        var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
 
-        // Publish position initialization event
-        var initializedEvent = new PositionEvent.Initialized(
-                position,
-            BigDecimal.valueOf(100.00),
-            BigDecimal.valueOf(5000.00),
-            BigDecimal.valueOf(50.00)
-        );
-
-        events.publish(initializedEvent, positionId);
-
-        // Wait for view to be updated
-        Awaitility.await()
-            .atMost(10, TimeUnit.SECONDS)
-            .untilAsserted(() -> {
-                var result = componentClient.forView()
-                    .method(PositionProcessingStatusView::getPosition)
-                    .invoke(positionId);
-
-                assertThat(result).isNotNull();
-                assertThat(result.positionId()).isEqualTo(positionId);
-                assertThat(result.accountId()).isEqualTo(position.accountId());
-                assertThat(result.instrumentId()).isEqualTo(position.instrumentId());
-                assertThat(result.initialized()).isTrue();
-                assertThat(result.transactionsProcessed()).isEqualTo(0);
-                assertThat(result.currentUnitsHeld()).isEqualByComparingTo(BigDecimal.valueOf(100.00));
-                assertThat(result.currentBookCost()).isEqualByComparingTo(BigDecimal.valueOf(5000.00));
-                assertThat(result.totalGainLoss()).isEqualByComparingTo(BigDecimal.ZERO);
-                assertThat(result.lastTransactionTime()).isEmpty();
-            });
-    }
 
     @Test
     public void testTransactionProcessingTracking() {
@@ -108,15 +71,6 @@ public class PositionProcessingStatusViewTest {
         var position =  new PositionId("ACC000002", "MSFT");
         var positionId = position.toEntityId(batchId);
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
-
-        // First initialize the position
-        var initializedEvent = new PositionEvent.Initialized(
-                position,
-            BigDecimal.valueOf(200.00),
-            BigDecimal.valueOf(10000.00),
-            BigDecimal.valueOf(50.00)
-        );
-        events.publish(initializedEvent, positionId);
 
         // Process a buy transaction
         var buyTransaction = new Transaction(
@@ -148,7 +102,6 @@ public class PositionProcessingStatusViewTest {
                     .invoke(positionId);
 
                 assertThat(result).isNotNull();
-                assertThat(result.initialized()).isTrue();
                 assertThat(result.transactionsProcessed()).isEqualTo(1);
                 assertThat(result.currentUnitsHeld()).isEqualByComparingTo(BigDecimal.valueOf(250.00));
                 assertThat(result.currentBookCost()).isEqualByComparingTo(BigDecimal.valueOf(12760.00));
@@ -162,15 +115,6 @@ public class PositionProcessingStatusViewTest {
         var position =  new PositionId("ACC000003", "GOOGL");
         var positionId = position.toEntityId(batchId);
         var events = testKit.getEventSourcedEntityIncomingMessages(PositionEntity.class);
-
-        // Initialize position
-        var initializedEvent = new PositionEvent.Initialized(
-            position,
-            BigDecimal.valueOf(100.00),
-            BigDecimal.valueOf(15000.00),
-            BigDecimal.valueOf(150.00)
-        );
-        events.publish(initializedEvent, positionId);
 
         // Process a sell transaction that generates gain/loss
         var sellTransaction = new Transaction(
@@ -215,13 +159,6 @@ public class PositionProcessingStatusViewTest {
 
         for (var positionId : accountPositionIds) {
             var positionIdStr = positionId.toEntityId(batchId);
-            var initializedEvent = new PositionEvent.Initialized(
-                    positionId,
-                BigDecimal.valueOf(100.00),
-                BigDecimal.valueOf(5000.00),
-                BigDecimal.valueOf(50.00)
-            );
-            events.publish(initializedEvent, positionIdStr);
 
             // Process a buy transaction
             var buyTransaction = new Transaction(

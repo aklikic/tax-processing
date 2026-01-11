@@ -7,8 +7,8 @@ import java.util.List;
  * Contains the updated position, events to persist, and optional gain/loss information.
  */
 public record PositionResult(
-    Position updatedPosition,
-    List<PositionEvent> events,
-    GainLossEvent gainLoss  // null for non-sell transactions
+//    Position updatedPosition,
+    List<PositionEvent> events
+//    GainLossEvent gainLoss  // null for non-sell transactions
 ) {
 }

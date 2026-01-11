@@ -31,12 +31,12 @@ public record Position(
      */
     public PositionResult processTransaction(Transaction transaction) {
         if (!accountId.equals(transaction.accountId()) || !instrumentId.equals(transaction.instrumentId())) {
-            return new PositionResult(this, List.of(), null);
+            return new PositionResult(List.of());
         }
 
         // Idempotency check - if transaction already processed, return no-op result
         if (processedTransactionIds.contains(transaction.id())) {
-            return new PositionResult(this, List.of(), null);
+            return new PositionResult(List.of());
         }
 
         return switch (transaction.type()) {
@@ -56,12 +56,9 @@ public record Position(
         var newUnits = unitsHeld.add(tx.units());
         var newBookCost = bookCost.add(tx.totalCost());
         var newCentsPerUnit = newBookCost.divide(newUnits, 4, RoundingMode.HALF_UP);
-
-        var updatedTransactionIds = processedTransactionIds.add(tx.id());
-        var updatedPosition = new Position(accountId, instrumentId, newUnits, newBookCost, newCentsPerUnit, updatedTransactionIds);
         var event = new PositionEvent.BookCostAdjusted(positionId(), tx, newUnits, newBookCost, newCentsPerUnit);
 
-        return new PositionResult(updatedPosition, List.of(event), null);
+        return new PositionResult(List.of(event));
     }
 
     /**
@@ -70,7 +67,7 @@ public record Position(
      */
     public PositionResult processSell(Transaction tx) {
         if (tx.units().compareTo(unitsHeld) > 0) {
-            return new PositionResult(this, List.of(), null);
+            return new PositionResult( List.of());
         }
 
         var netProceeds = tx.netProceeds();
@@ -80,14 +77,12 @@ public record Position(
         var newUnits = unitsHeld.subtract(tx.units());
         var newBookCost = bookCost.subtract(costBasis);
 
-        var updatedTransactionIds = processedTransactionIds.add(tx.id());
-        var updatedPosition = new Position(accountId, instrumentId, newUnits, newBookCost, centsPerUnit, updatedTransactionIds);
         List<PositionEvent> events = List.of(
             new PositionEvent.GainLossIncurred(positionId(), tx, gainLoss),
             new PositionEvent.BookCostAdjusted(positionId(), tx, newUnits, newBookCost, centsPerUnit)
         );
 
-        return new PositionResult(updatedPosition, events, new GainLossEvent(positionId(), tx, gainLoss));
+        return new PositionResult(events);
     }
 
     /**
@@ -99,12 +94,9 @@ public record Position(
         var transferCost = tx.units().multiply(tx.price());
         var newBookCost = bookCost.add(transferCost);
         var newCentsPerUnit = newBookCost.divide(newUnits, 4, RoundingMode.HALF_UP);
-
-        var updatedTransactionIds = processedTransactionIds.add(tx.id());
-        var updatedPosition = new Position(accountId, instrumentId, newUnits, newBookCost, newCentsPerUnit, updatedTransactionIds);
         var event = new PositionEvent.BookCostAdjusted(positionId(), tx, newUnits, newBookCost, newCentsPerUnit);
 
-        return new PositionResult(updatedPosition, List.of(event), null);
+        return new PositionResult(List.of(event));
     }
 
     /**
@@ -113,7 +105,7 @@ public record Position(
      */
     public PositionResult processTransferOut(Transaction tx) {
         if (tx.units().compareTo(unitsHeld) > 0) {
-            return new PositionResult(this, List.of(), null);
+            return new PositionResult(List.of());
         }
 
         var newUnits = unitsHeld.subtract(tx.units());
@@ -122,11 +114,9 @@ public record Position(
         var newCentsPerUnit = newUnits.compareTo(BigDecimal.ZERO) == 0 ?
             BigDecimal.ZERO : newBookCost.divide(newUnits, 4, RoundingMode.HALF_UP);
 
-        var updatedTransactionIds = processedTransactionIds.add(tx.id());
-        var updatedPosition = new Position(accountId, instrumentId, newUnits, newBookCost, newCentsPerUnit, updatedTransactionIds);
         var event = new PositionEvent.BookCostAdjusted(positionId(), tx, newUnits, newBookCost, newCentsPerUnit);
 
-        return new PositionResult(updatedPosition, List.of(event), null);
+        return new PositionResult(List.of(event));
     }
 
     /**
@@ -139,10 +129,30 @@ public record Position(
         var newCentsPerUnit = unitsHeld.compareTo(BigDecimal.ZERO) == 0 ?
             BigDecimal.ZERO : newBookCost.divide(unitsHeld, 4, RoundingMode.HALF_UP);
 
-        var updatedTransactionIds = processedTransactionIds.add(tx.id());
-        var updatedPosition = new Position(accountId, instrumentId, unitsHeld, newBookCost, newCentsPerUnit, updatedTransactionIds);
         var event = new PositionEvent.BookCostAdjusted(positionId(), tx, unitsHeld, newBookCost, newCentsPerUnit);
 
-        return new PositionResult(updatedPosition, List.of(event), null);
+        return new PositionResult( List.of(event));
     }
+
+    public Position onBookCostAdjustedEvent(PositionEvent.BookCostAdjusted event){
+        return new Position(
+                accountId,
+                instrumentId,
+                event.unitsHeld(),
+                event.bookCost(),
+                event.centsPerUnit(),
+                processedTransactionIds().add(event.transaction().id())
+        );
+    }
+    public Position onGainLossIncurredEvent(PositionEvent.GainLossIncurred event){
+        return new Position(
+                accountId,
+                instrumentId,
+                unitsHeld,
+                bookCost,
+                centsPerUnit,
+                processedTransactionIds().add(event.transaction().id())
+        );
+    }
+
 }

@@ -27,14 +27,14 @@ public class PositionBatchControllerStateTest {
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            1000L, 100, 10, 3, 5, windowStatuses, 350L, 3, null
+            1000L, 100, 10, 3, 5, windowStatuses, 0, 350L, 3, 0, null
         );
 
         // Add window 5 as running first, then complete it
         windowStatuses.put("5", new PositionBatchControllerState.WindowStatus("5", 500, 100, "batch-5", PositionBatchControllerState.WindowProcessingStatus.RUNNING, 0, null));
         state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            1000L, 100, 10, 3, 5, windowStatuses, 350L, 3, null
+            1000L, 100, 10, 3, 5, windowStatuses, 0,350L, 3, 0,null
         );
 
         // Complete window 5, with limit of 2 completed/failed windows to keep
@@ -52,7 +52,7 @@ public class PositionBatchControllerStateTest {
         assertThat(newState.windowStatuses().get("5").status()).isEqualTo(PositionBatchControllerState.WindowProcessingStatus.COMPLETED);
 
         // Verify completed positions updated
-        assertThat(newState.completedPositions()).isEqualTo(450); // 350 + 100
+        assertThat(newState.completedPositions()).isEqualTo(450);
     }
 
     @Test
@@ -65,7 +65,7 @@ public class PositionBatchControllerStateTest {
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            1000L, 100, 10, 3, 2, windowStatuses, 100L, 1, null
+            1000L, 100, 10, 3, 2, windowStatuses, 0,100L, 1, 0,null
         );
 
         // Complete window 1, with limit of 3 completed/failed windows to keep
@@ -88,7 +88,7 @@ public class PositionBatchControllerStateTest {
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            1000L, 100, 10, 3, 2, windowStatuses, 150L, 2, null
+            1000L, 100, 10, 3, 2, windowStatuses, 0,150L, 2, 0,null
         );
 
         // Complete window 2, with limit of 2 completed/failed windows to keep
@@ -113,7 +113,7 @@ public class PositionBatchControllerStateTest {
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            1000L, 100, 10, 3, 4, windowStatuses, 200L, 2, null
+            1000L, 100, 10, 3, 4, windowStatuses, 0,200L, 2, 0,null
         );
 
         // Complete window 4, with limit of 1 completed/failed window to keep
@@ -141,7 +141,7 @@ public class PositionBatchControllerStateTest {
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            2000L, 100, 20, 3, 10, windowStatuses, 300L, 3, null  // maxParallelWindows=3 and exactly 3 windows running
+            2000L, 100, 20, 3, 10, windowStatuses, 0,300L, 3,0, null  // maxParallelWindows=3 and exactly 3 windows running
         );
 
         // Try to prepare next batch - should not create any new windows
@@ -165,7 +165,7 @@ public class PositionBatchControllerStateTest {
 
         var state = new PositionBatchControllerState(
             "batch-001", "2023", PositionBatchControllerState.ProcessingStatus.LAUNCHING_WINDOWS,
-            2000L, 100, 20, 5, 10, windowStatuses, 200L, 2, null  // maxParallelWindows=5, 2 running, nextWindowId=10
+            2000L, 100, 20, 5, 10, windowStatuses, 0,200L, 2, 0,null  // maxParallelWindows=5, 2 running, nextWindowId=10
         );
 
         // Try to prepare next batch - should create exactly 3 new windows (5 max - 2 running = 3 available)

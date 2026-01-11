@@ -34,10 +34,10 @@ public class Bootstrap implements ServiceSetup {
         logger.info("Tax Processing Service starting up");
     }
 
-    @Override
-    public Set<Class<?>> disabledComponents() {
-        return Set.of(PositionProcessingStatusView.class);
-    }
+//    @Override
+//    public Set<Class<?>> disabledComponents() {
+//        return Set.of(PositionProcessingStatusView.class);
+//    }
 
     @Override
     public DependencyProvider createDependencyProvider() {
