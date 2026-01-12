@@ -10,5 +10,6 @@
  -->
 <included>
     <logger name="com.example" level="INFO"/>
+<!--    <logger name="io.r2dbc.postgresql.QUERY" level="DEBUG"/>-->
 <!--    <logger name="kalix.runtime" level="DEBUG"/>-->
 </included>

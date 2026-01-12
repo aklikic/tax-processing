@@ -157,7 +157,7 @@ public class PositionBatchWindowWorkflow extends Workflow<PositionBatchWindowSta
             logger.error("[{}] Ignoring late acceptanceTimeout notification", commandContext().workflowId());
             return effects().reply(Done.getInstance());
         }
-        logger.debug("[{}] Callback for acceptanceTimeout. Retry startStep.", commandContext().workflowId());
+        logger.info("[{}] Callback for acceptanceTimeout. Retry startStep.", commandContext().workflowId());
 
         return effects()
                 .updateState(state.withStatus(PositionBatchWindowState.ProcessingStatus.START))
