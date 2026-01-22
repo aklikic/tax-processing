@@ -74,16 +74,6 @@ public class PositionEntity extends EventSourcedEntity<Position, PositionEvent> 
     @Override
     public Position applyEvent(PositionEvent event) {
         return switch (event) {
-//            case PositionEvent.Initialized initialized -> {
-//                yield new Position(
-//                    initialized.positionId().accountId(),
-//                    initialized.positionId().instrumentId(),
-//                    initialized.initialUnits(),
-//                    initialized.initialBookCost(),
-//                    initialized.initialCentsPerUnit(),
-//                    BoundedTransactionIdCache.empty(processingConfig.positionIdempotencyCacheSize())
-//                );
-//            }
 
             case PositionEvent.BookCostAdjusted adjusted ->
                 new Position(
