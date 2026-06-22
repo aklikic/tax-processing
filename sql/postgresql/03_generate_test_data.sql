@@ -10,12 +10,12 @@ SET search_path TO tax, public;
 -- Configuration variables - modify these for different test scenarios
 
 -- Development/Test Configuration
---\set target_opening_balances 1000000
---\set target_avg_transactions_per_position 2.8
+\set target_opening_balances 20
+\set target_avg_transactions_per_position 2.8
 
 ---- Performance Target Configuration
- \set target_opening_balances 4400000
- \set target_avg_transactions_per_position 2.8
+-- \set target_opening_balances 4400000
+-- \set target_avg_transactions_per_position 2.8
 
 -- Calculate derived values
 -- Instruments per account (20 instruments, so accounts = target_balances / 20)

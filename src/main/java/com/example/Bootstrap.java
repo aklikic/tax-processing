@@ -3,6 +3,7 @@ package com.example;
 import akka.javasdk.DependencyProvider;
 import akka.javasdk.ServiceSetup;
 import akka.javasdk.annotations.Setup;
+import com.example.application.ExternalTransactionConsumer;
 import com.example.application.PositionProcessingStatusView;
 import com.example.application.TaxDataRepository;
 import com.example.domain.ProcessingConfig;
@@ -34,10 +35,10 @@ public class Bootstrap implements ServiceSetup {
         logger.info("Tax Processing Service starting up");
     }
 
-//    @Override
-//    public Set<Class<?>> disabledComponents() {
-//        return Set.of(PositionProcessingStatusView.class);
-//    }
+    @Override
+    public Set<Class<?>> disabledComponents() {
+        return Set.of(ExternalTransactionConsumer.class);
+    }
 
     @Override
     public DependencyProvider createDependencyProvider() {
